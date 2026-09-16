@@ -8,7 +8,6 @@ import { Screen, SectionTitle } from '@/components/ui/Screen'
 import { Fab } from '@/components/ui/Fab'
 import { Avatar, Badge, Empty, Row } from '@/components/ui/Bits'
 import { IconChip, iconoRubro } from '@/components/ui/Icon'
-import { AdSlot } from '@/components/AdSlot'
 import { VentaSheet } from '@/components/comercial/VentaSheet'
 import { useNav } from '@/components/nav'
 import { rankingProductos, stockCritico, ticketPromedio, totalVentas, ventasDelDia, ventasPorHora } from '@/lib/calc'
@@ -149,8 +148,6 @@ export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => v
             ))
           )}
         </Card>
-
-        <AdSlot />
       </Screen>
 
       <Fab

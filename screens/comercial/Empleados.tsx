@@ -16,7 +16,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useNav } from '@/components/nav'
 import { addEmpleado, removeEmpleado, updateEmpleado } from '@/lib/storage'
 import { costoEmpleado } from '@/lib/calc'
-import { fechaCorta, money } from '@/lib/format'
+import { fechaCorta, hoyISO, money } from '@/lib/format'
 import type { DB, Empleado } from '@/lib/types'
 
 export function Empleados({ db }: { db: DB }) {
@@ -115,7 +115,7 @@ function EmpleadoSheet({
       puesto: puesto.trim() || 'Empleado',
       sueldo,
       activo,
-      ingreso: empleado?.ingreso ?? new Date().toISOString().slice(0, 10),
+      ingreso: empleado?.ingreso ?? hoyISO(),
       permisos: empleado?.permisos ?? { ventas: true, stock: false, reportes: false },
     }
 

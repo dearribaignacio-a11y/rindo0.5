@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import {
   Boxes,
@@ -134,13 +134,35 @@ function faseActual(db: DB): Fase {
 
 function Interna({ db }: { db: DB }) {
   const nav = useNav()
-  const { ruta, params } = nav.actual
+  const entrada = nav.actual
+  const { ruta } = entrada
   const plan = db.perfil?.plan ?? 'hogar'
+
+  /**
+   * La pestaña activa vive acá y no dentro de `Tabs`, por dos motivos:
+   *
+   * · `Tabs` se desmonta al abrir una pantalla apilada (la `key` del
+   *   `ScreenTransition` es la ruta). Con el estado adentro, volver de
+   *   Empleados te dejaba en Resumen en vez de en Ajustes, que es de donde
+   *   habías salido.
+   * · `nav.push('tabs', { tab: 'familia' })` no cambiaba nada: la ruta sigue
+   *   siendo 'tabs', así que no hay remonte y el inicializador de `useState`
+   *   no se vuelve a leer. El botón "Cuenta familiar" de Ajustes no hacía nada.
+   */
+  const [tab, setTab] = useState<string>('resumen')
+
+  // Cada `push` crea una entrada nueva, así que la identidad de `entrada`
+  // alcanza para detectar una navegación que pide una pestaña puntual. Al
+  // volver con `pop`, la entrada no trae `tab` y la pestaña actual se respeta.
+  useEffect(() => {
+    const pedida = entrada.params?.tab
+    if (entrada.ruta === 'tabs' && typeof pedida === 'string') setTab(pedida)
+  }, [entrada])
 
   return (
     <AnimatePresence mode="wait" initial={false}>
       <ScreenTransition key={ruta} direction={nav.direccion}>
-        {ruta === 'tabs' && <Tabs db={db} tabInicial={params?.tab as string | undefined} />}
+        {ruta === 'tabs' && <Tabs db={db} tab={tab} onTab={setTab} />}
         {ruta === 'tema' && <PantallaTema db={db} />}
         {ruta === 'perfil' && <PantallaPerfil db={db} />}
         {ruta === 'password' && <PantallaPassword />}
@@ -154,7 +176,7 @@ function Interna({ db }: { db: DB }) {
         {ruta === 'pro-precios' && esPro(plan) && <ProPrecios db={db} />}
         {ruta === 'pro-personal' && esPro(plan) && <ProPersonal db={db} />}
         {ruta === 'pro-impuestos' && esPro(plan) && <ProImpuestos db={db} />}
-        {ruta === 'chat' && esPro(plan) && <ProChat />}
+        {ruta === 'chat' && esPro(plan) && <ProChat db={db} />}
       </ScreenTransition>
     </AnimatePresence>
   )
@@ -191,15 +213,36 @@ const TABS_COMERCIAL_PRO: TabDef<TabComercial>[] = [
   { id: 'ajustes', label: 'Ajustes', icon: Settings },
 ]
 
-function Tabs({ db, tabInicial }: { db: DB; tabInicial?: string }) {
-  const plan = db.perfil?.plan ?? 'hogar'
-
-  if (plan === 'hogar') return <TabsHogar db={db} tabInicial={tabInicial} />
-  return <TabsComercial db={db} plan={plan} tabInicial={tabInicial} />
+/**
+ * Devuelve `candidata` sólo si es una pestaña que este plan realmente muestra;
+ * si no, cae en la primera.
+ *
+ * Sin esto, una pestaña de otro plan —o un plan que baja de Pro a Comercial
+ * con "Asistente" seleccionada— deja el contenido en blanco con el tab bar sin
+ * nada marcado, porque ninguna rama del render coincide.
+ */
+function tabValida<T extends string>(tabs: TabDef<T>[], candidata: string | undefined): T {
+  const existe = tabs.some((t) => t.id === candidata)
+  return (existe ? candidata : tabs[0].id) as T
 }
 
-function TabsHogar({ db, tabInicial }: { db: DB; tabInicial?: string }) {
-  const [tab, setTab] = useState<TabHogar>((tabInicial as TabHogar) ?? 'resumen')
+interface TabsProps {
+  db: DB
+  /** Pestaña activa. El estado vive en `Interna` para sobrevivir al apilado. */
+  tab: string
+  onTab: (t: string) => void
+}
+
+function Tabs({ db, tab, onTab }: TabsProps) {
+  const plan = db.perfil?.plan ?? 'hogar'
+
+  if (plan === 'hogar') return <TabsHogar db={db} tab={tab} onTab={onTab} />
+  return <TabsComercial db={db} plan={plan} tab={tab} onTab={onTab} />
+}
+
+function TabsHogar({ db, tab: pedida, onTab }: TabsProps) {
+  const tab = tabValida(TABS_HOGAR, pedida)
+  const setTab = onTab as (t: TabHogar) => void
 
   return (
     <>
@@ -226,29 +269,34 @@ function TabsHogar({ db, tabInicial }: { db: DB; tabInicial?: string }) {
 
 /** Pestañas de Comercial y Comercial Pro: mismo esqueleto, la pestaña extra
  *  "Asistente" sólo aparece si el plan la incluye. */
-function TabsComercial({ db, plan, tabInicial }: { db: DB; plan: PlanId; tabInicial?: string }) {
+function TabsComercial({ db, plan, tab: pedida, onTab }: TabsProps & { plan: PlanId }) {
   const pro = esPro(plan)
-  const [tab, setTab] = useState<TabComercial>((tabInicial as TabComercial) ?? 'resumen')
   const tabs = pro ? TABS_COMERCIAL_PRO : TABS_COMERCIAL
+  const setTab = onTab as (t: TabComercial) => void
+
+  // Si el plan baja de Pro a Comercial, la pestaña "Asistente" desaparece del
+  // tab bar. Se deriva en el render en vez de corregir el estado: así no hay
+  // un frame con el contenido vacío.
+  const activa = tabValida(tabs, pedida)
 
   return (
     <>
       <AnimatePresence mode="wait" initial={false}>
-        <ScreenTransition key={tab} direction="none">
-          {tab === 'resumen' && (
+        <ScreenTransition key={activa} direction="none">
+          {activa === 'resumen' && (
             <ComercialResumen db={db} onVerTodo={() => setTab('movimientos')} />
           )}
-          {tab === 'movimientos' && <ComercialMovimientos db={db} />}
-          {tab === 'productos' && <ComercialProductos db={db} />}
-          {tab === 'stock' && <ComercialStock db={db} />}
-          {tab === 'ia' && pro && <ProHub db={db} />}
-          {tab === 'ajustes' && (
+          {activa === 'movimientos' && <ComercialMovimientos db={db} />}
+          {activa === 'productos' && <ComercialProductos db={db} />}
+          {activa === 'stock' && <ComercialStock db={db} />}
+          {activa === 'ia' && pro && <ProHub db={db} />}
+          {activa === 'ajustes' && (
             <Ajustes db={db} onCerrarSesion={() => aplicarTema(db.ajustes.tema)} />
           )}
         </ScreenTransition>
       </AnimatePresence>
 
-      <TabBar tabs={tabs} value={tab} onChange={setTab} />
+      <TabBar tabs={tabs} value={activa} onChange={setTab} />
     </>
   )
 }

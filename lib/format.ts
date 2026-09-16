@@ -35,7 +35,39 @@ const MESES = [
 ]
 const DIAS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
 
-export const hoyISO = () => new Date().toISOString().slice(0, 10)
+/* ── Fechas locales ────────────────────────────────────────────────────────
+   Todo lo que se guarda es "ISO local": 'yyyy-mm-dd' o
+   'yyyy-mm-ddTHH:mm:ss', sin sufijo Z y sin offset.
+
+   Es a propósito. La app agrupa y compara días con `fecha.slice(0, 10)`
+   (`mismoDia`, `ventasDelDia`, `claveMes`), así que ese prefijo tiene que ser
+   el día del calendario del comerciante. `new Date().toISOString()` convierte
+   a UTC, y al oeste de Greenwich eso adelanta el día: en San Juan (UTC−3) una
+   venta de las 21:15 se guardaba como 00:15 del día siguiente y aparecía
+   agrupada en mañana. Un comercio que cierra a las 21 tenía mal cargada la
+   última hora de cada jornada.
+
+   Un string sin zona además lo parsea `new Date(...)` como hora local, así que
+   `hora(iso)` y `desdeISO(iso)` siguen funcionando igual.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const dosDigitos = (n: number) => String(n).padStart(2, '0')
+
+/** 'yyyy-mm-dd' de un Date, en hora local. */
+export function isoLocal(d: Date = new Date()) {
+  return `${d.getFullYear()}-${dosDigitos(d.getMonth() + 1)}-${dosDigitos(d.getDate())}`
+}
+
+/** 'yyyy-mm-ddTHH:mm:ss' de un Date, en hora local. Para marcas de tiempo. */
+export function isoLocalConHora(d: Date = new Date()) {
+  return `${isoLocal(d)}T${dosDigitos(d.getHours())}:${dosDigitos(d.getMinutes())}:${dosDigitos(d.getSeconds())}`
+}
+
+/** El día de hoy según el reloj del usuario. */
+export const hoyISO = () => isoLocal()
+
+/** Marca de tiempo de ahora, en hora local. Es lo que se guarda en `fecha`. */
+export const ahoraISO = () => isoLocalConHora()
 
 /** Convierte 'yyyy-mm-dd' a Date local (evita el corrimiento de zona de `new Date(str)`). */
 export function desdeISO(iso: string) {
@@ -51,8 +83,8 @@ export function fechaRelativa(iso: string) {
   const ayer = new Date()
   ayer.setDate(ayer.getDate() - 1)
   const s = iso.slice(0, 10)
-  if (s === hoy.toISOString().slice(0, 10)) return 'Hoy'
-  if (s === ayer.toISOString().slice(0, 10)) return 'Ayer'
+  if (s === isoLocal(hoy)) return 'Hoy'
+  if (s === isoLocal(ayer)) return 'Ayer'
   const d = desdeISO(s)
   return `${DIAS[d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`
 }

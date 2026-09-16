@@ -19,7 +19,7 @@ import { AdSlot } from '@/components/AdSlot'
 import { MovimientoSheet } from '@/components/hogar/MovimientoSheet'
 import { TicketSheet } from '@/components/hogar/TicketSheet'
 import { resumenMes, usoPorCategoria } from '@/lib/calc'
-import { fechaCorta, fechaRelativa, money, moneySigned } from '@/lib/format'
+import { fechaCorta, fechaRelativa, isoLocal, money, moneySigned } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import type { DB } from '@/lib/types'
 
@@ -223,6 +223,6 @@ export function HogarResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => void 
 function proximoSueldo() {
   const d = new Date()
   d.setMonth(d.getMonth() + 1, 1)
-  return d.toISOString().slice(0, 10)
+  return isoLocal(d)
 }
 

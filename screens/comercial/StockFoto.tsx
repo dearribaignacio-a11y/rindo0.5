@@ -10,7 +10,7 @@ import { Field, MoneyInput } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
 import { useNav } from '@/components/nav'
 import { addReposicion } from '@/lib/storage'
-import { money } from '@/lib/format'
+import { ahoraISO, money } from '@/lib/format'
 import { leerComprobante, type ItemDetectado } from '@/lib/vision'
 import { cn } from '@/lib/cn'
 
@@ -32,6 +32,8 @@ export function StockFoto() {
   const [proveedor, setProveedor] = useState('')
   const [total, setTotal] = useState<number | null>(null)
   const [simulado, setSimulado] = useState(false)
+  /** Motivo por el que la foto no se pudo leer, si pasó. */
+  const [errorLectura, setErrorLectura] = useState<string>()
 
   useEffect(() => {
     document.body.style.overflow = 'hidden'
@@ -48,6 +50,7 @@ export function StockFoto() {
 
     const res = await leerComprobante(dataUrl, 'factura')
     setSimulado(res.fuente === 'simulado')
+    setErrorLectura(res.error)
     setItems(res.datos.items)
     setProveedor(res.datos.comercio ?? '')
     const sumado = res.datos.items.reduce((s, i) => s + i.costo * i.cantidad, 0)
@@ -62,7 +65,7 @@ export function StockFoto() {
   function guardar() {
     if (items.length === 0) return toast('No hay renglones para cargar', 'aviso')
     addReposicion({
-      fecha: new Date().toISOString(),
+      fecha: ahoraISO(),
       items: items.map((i) => ({
         productoId: null,
         nombre: i.nombre,
@@ -133,11 +136,17 @@ export function StockFoto() {
             </div>
           </div>
 
-          {simulado && (
-            <p className="text-[12px] leading-relaxed text-ink-faint">
-              Lectura de ejemplo: todavía no hay una clave de IA configurada en el servidor. Podés
-              editar todo a mano igual.
+          {errorLectura ? (
+            <p className="rounded-[10px] border border-warn/40 bg-warn-dim px-3 py-2 text-[12.5px] leading-relaxed text-warn">
+              {errorLectura}
             </p>
+          ) : (
+            simulado && (
+              <p className="text-[12px] leading-relaxed text-ink-faint">
+                Lectura de ejemplo: todavía no hay una clave de IA configurada en el servidor. Podés
+                editar todo a mano igual.
+              </p>
+            )
           )}
 
           <Field label={`Renglones detectados (${items.length})`}>

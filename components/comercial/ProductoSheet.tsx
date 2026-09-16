@@ -17,10 +17,13 @@ export function ProductoSheet({
   open,
   onClose,
   producto,
+  productos = [],
 }: {
   open: boolean
   onClose: () => void
   producto?: Producto | null
+  /** Catálogo completo, para no dejar dos productos con el mismo nombre. */
+  productos?: Producto[]
 }) {
   const toast = useToast()
   const editando = Boolean(producto)
@@ -55,13 +58,24 @@ export function ProductoSheet({
   }, [open, producto])
 
   const margenPreview = costo && precio && precio > 0 ? margen({ costo, precio } as Producto) : null
+  /** Vender por debajo del costo es legítimo (liquidación), pero no puede
+   *  pasar por descuido: se avisa sin bloquear el guardado. */
+  const pierdePlata = costo !== null && precio !== null && precio > 0 && precio < costo
 
   function guardar() {
-    if (!nombre.trim()) return setError('Ponele un nombre al producto')
+    const limpio = nombre.trim()
+    if (!limpio) return setError('Ponele un nombre al producto')
     if (precio === null || precio <= 0) return setError('El precio de venta tiene que ser mayor a cero')
 
+    // Dos productos con el mismo nombre rompen al asistente, que los resuelve
+    // justamente por nombre, y confunden la lista de stock.
+    const repetido = productos.some(
+      (x) => x.id !== producto?.id && x.nombre.trim().toLowerCase() === limpio.toLowerCase(),
+    )
+    if (repetido) return setError('Ya tenés un producto con ese nombre')
+
     const datos = {
-      nombre: nombre.trim(),
+      nombre: limpio,
       categoria: categoria.trim() || 'Sin categoría',
       costo: costo ?? 0,
       precio,
@@ -115,7 +129,12 @@ export function ProductoSheet({
             label="Nombre"
             placeholder="Ej. Yerba 1kg"
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => {
+              setNombre(e.target.value)
+              // Un error de nombre repetido que no se va al corregirlo es peor
+              // que no mostrarlo: se limpia en cuanto el usuario escribe.
+              if (error) setError(undefined)
+            }}
             error={error}
           />
           <Input
@@ -128,10 +147,16 @@ export function ProductoSheet({
             <MoneyInput label="Costo" value={costo} onChange={setCosto} />
             <MoneyInput label="Precio de venta" value={precio} onChange={setPrecio} />
           </div>
-          {margenPreview !== null && (
+          {margenPreview !== null && !pierdePlata && (
             <p className="text-[12.5px] text-ink-faint">
               Margen: <span className="font-medium text-ink">{pct1(margenPreview)}</span>
               {costo && precio ? ` · ganás ${money(precio - costo)} por unidad` : ''}
+            </p>
+          )}
+          {pierdePlata && (
+            <p className="rounded-[10px] border border-warn/40 bg-warn-dim px-3 py-2 text-[12.5px] leading-relaxed text-warn">
+              El precio está por debajo del costo: perdés {money(costo! - precio!)} por unidad.
+              Podés guardarlo igual si es una liquidación.
             </p>
           )}
           <div className="grid grid-cols-2 gap-3">

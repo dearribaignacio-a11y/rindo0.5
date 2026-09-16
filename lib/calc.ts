@@ -1,4 +1,4 @@
-import { claveMes, desdeISO, diaCorto } from './format'
+import { claveMes, desdeISO, diaCorto, hoyISO, isoLocal } from './format'
 import type { Categoria, Empleado, Movimiento, Producto, Venta } from './types'
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -17,7 +17,7 @@ export interface ResumenMes {
   balance: number
 }
 
-export function resumenMes(movs: Movimiento[], mes = claveMes(new Date().toISOString())): ResumenMes {
+export function resumenMes(movs: Movimiento[], mes = claveMes(hoyISO())): ResumenMes {
   let ingresos = 0
   let gastos = 0
   for (const m of movs) {
@@ -40,7 +40,7 @@ export interface UsoCategoria {
 export function usoPorCategoria(
   movs: Movimiento[],
   cats: Categoria[],
-  mes = claveMes(new Date().toISOString()),
+  mes = claveMes(hoyISO()),
 ): UsoCategoria[] {
   const gastoPorCat = new Map<string, number>()
   for (const m of movs) {
@@ -63,7 +63,7 @@ export function usoPorCategoria(
 }
 
 /** Total gastado en el mes, incluidas las categorías sin presupuesto. */
-export function gastoDelMes(movs: Movimiento[], mes = claveMes(new Date().toISOString())) {
+export function gastoDelMes(movs: Movimiento[], mes = claveMes(hoyISO())) {
   return movs
     .filter((m) => m.tipo === 'gasto' && claveMes(m.fecha) === mes)
     .reduce((s, m) => s + m.monto, 0)
@@ -94,7 +94,7 @@ export function serieVentas(ventas: Venta[], dias = 7) {
   for (let i = dias - 1; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
-    const iso = d.toISOString().slice(0, 10)
+    const iso = isoLocal(d)
     salida.push({
       label: diaCorto(d),
       iso,
@@ -181,7 +181,7 @@ export const variacion = (actual: number, anterior: number) =>
   anterior > 0 ? (actual - anterior) / anterior : 0
 
 /** Ventas del mes en curso. */
-export function ventasDelMes(ventas: Venta[], mes = claveMes(new Date().toISOString())) {
+export function ventasDelMes(ventas: Venta[], mes = claveMes(hoyISO())) {
   return ventas.filter((v) => claveMes(v.fecha) === mes)
 }
 

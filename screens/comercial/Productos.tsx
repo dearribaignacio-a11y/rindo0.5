@@ -81,8 +81,13 @@ export function ComercialProductos({ db }: { db: DB }) {
 
       <Fab label="Agregar producto" onClick={() => setCreando(true)} />
 
-      <ProductoSheet open={creando} onClose={() => setCreando(false)} />
-      <ProductoSheet open={Boolean(editando)} onClose={() => setEditando(null)} producto={editando} />
+      <ProductoSheet open={creando} onClose={() => setCreando(false)} productos={db.productos} />
+      <ProductoSheet
+        open={Boolean(editando)}
+        onClose={() => setEditando(null)}
+        producto={editando}
+        productos={db.productos}
+      />
     </>
   )
 }

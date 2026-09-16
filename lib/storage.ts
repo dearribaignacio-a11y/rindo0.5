@@ -30,6 +30,7 @@ import type {
   Venta,
 } from './types'
 import { seedComercial, seedHogar } from './seed'
+import { ahoraISO, hoyISO } from './format'
 
 const KEY = 'rindo.db'
 const THEME_KEY = 'rindo.theme'
@@ -237,7 +238,7 @@ export function getInvitacion(): Invitacion {
   const codigo = Array.from({ length: 6 }, () =>
     'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'.charAt(Math.floor(Math.random() * 32)),
   ).join('')
-  const inv: Invitacion = { codigo, creada: new Date().toISOString(), estado: 'pendiente' }
+  const inv: Invitacion = { codigo, creada: ahoraISO(), estado: 'pendiente' }
   setDB((db) => ({ ...db, invitacion: inv }))
   return inv
 }
@@ -380,7 +381,7 @@ export function removeImpuesto(iid: string) {
 
 /** Marca pagado el período actual y lo agrega al historial. */
 export function marcarPagado(iid: string) {
-  const hoy = new Date().toISOString().slice(0, 10)
+  const hoy = hoyISO()
   setDB((db) => ({
     ...db,
     impuestos: db.impuestos.map((i) =>

@@ -11,7 +11,7 @@ import { Empty } from '@/components/ui/Bits'
 import { IconChip, iconoRubro } from '@/components/ui/Icon'
 import { useToast } from '@/components/ui/Toast'
 import { addVenta } from '@/lib/storage'
-import { money } from '@/lib/format'
+import { ahoraISO, money } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import type { MetodoPago, Producto } from '@/lib/types'
 
@@ -58,7 +58,7 @@ export function VentaSheet({
   function confirmar() {
     if (items.length === 0) return toast('Agregá al menos un producto', 'aviso')
     addVenta({
-      fecha: new Date().toISOString(),
+      fecha: ahoraISO(),
       items: items.map((i) => ({
         productoId: i.producto.id,
         nombre: i.producto.nombre,

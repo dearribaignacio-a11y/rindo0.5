@@ -9,6 +9,7 @@ import type {
   Producto,
   Venta,
 } from './types'
+import { isoLocal, isoLocalConHora } from './format'
 
 /**
  * Datos de ejemplo que se cargan una única vez, al terminar el setup.
@@ -21,19 +22,24 @@ import type {
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
 
+/* Las fechas se arman con los helpers locales de `format`. Con
+   `toISOString()` la semilla generaba ventas fechadas mañana: construía la
+   hora en local (21:15) y la serializaba en UTC (00:15 del día siguiente),
+   así que las últimas horas de cada jornada caían en el día equivocado. */
+
 /** yyyy-mm-dd de hace `n` días. */
 function hace(n: number) {
   const d = new Date()
   d.setDate(d.getDate() - n)
-  return d.toISOString().slice(0, 10)
+  return isoLocal(d)
 }
 
-/** ISO completo de hace `n` días a la hora `h`. */
+/** ISO local completo de hace `n` días a la hora `h`. */
 function haceHora(n: number, h: number, m = 0) {
   const d = new Date()
   d.setDate(d.getDate() - n)
   d.setHours(h, m, 0, 0)
-  return d.toISOString()
+  return isoLocalConHora(d)
 }
 
 /** yyyy-mm-dd del día `dia` del mes en curso (o del siguiente si ya pasó). */
@@ -41,7 +47,7 @@ function proximoDia(dia: number) {
   const hoy = new Date()
   const d = new Date(hoy.getFullYear(), hoy.getMonth(), dia)
   if (d < hoy) d.setMonth(d.getMonth() + 1)
-  return d.toISOString().slice(0, 10)
+  return isoLocal(d)
 }
 
 const redondear = (n: number) => Math.round(n / 50) * 50

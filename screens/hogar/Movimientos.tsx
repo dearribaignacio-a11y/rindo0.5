@@ -11,7 +11,7 @@ import { Empty, Row } from '@/components/ui/Bits'
 import { IconChip, iconoDe } from '@/components/ui/Icon'
 import { MovimientoSheet } from '@/components/hogar/MovimientoSheet'
 import { agruparPorFecha } from '@/lib/calc'
-import { claveMes, fechaRelativa, mesLargo, money, moneySigned } from '@/lib/format'
+import { claveMes, fechaRelativa, isoLocal, mesLargo, money, moneySigned } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import type { DB, Movimiento, TipoMovimiento } from '@/lib/types'
 
@@ -30,7 +30,7 @@ export function HogarMovimientos({ db }: { db: DB }) {
     d.setMonth(d.getMonth() - offsetMes, 1)
     return d
   }, [offsetMes])
-  const mes = claveMes(mesRef.toISOString())
+  const mes = claveMes(isoLocal(mesRef))
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
