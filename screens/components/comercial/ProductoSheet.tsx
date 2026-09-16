@@ -1,0 +1,171 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { Trash2 } from 'lucide-react'
+import { Sheet } from '@/components/ui/Sheet'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
+import { Field, MoneyInput } from '@/components/ui/Field'
+import { useToast } from '@/components/ui/Toast'
+import { addProducto, removeProducto, updateProducto } from '@/lib/storage'
+import { money, pct1 } from '@/lib/format'
+import { margen } from '@/lib/calc'
+import type { Producto } from '@/lib/types'
+
+export function ProductoSheet({
+  open,
+  onClose,
+  producto,
+}: {
+  open: boolean
+  onClose: () => void
+  producto?: Producto | null
+}) {
+  const toast = useToast()
+  const editando = Boolean(producto)
+  const [confirmando, setConfirmando] = useState(false)
+
+  const [nombre, setNombre] = useState('')
+  const [categoria, setCategoria] = useState('')
+  const [costo, setCosto] = useState<number | null>(null)
+  const [precio, setPrecio] = useState<number | null>(null)
+  const [stock, setStock] = useState<number | null>(null)
+  const [stockMin, setStockMin] = useState<number | null>(null)
+  const [error, setError] = useState<string>()
+
+  useEffect(() => {
+    if (!open) return
+    setError(undefined)
+    if (producto) {
+      setNombre(producto.nombre)
+      setCategoria(producto.categoria)
+      setCosto(producto.costo)
+      setPrecio(producto.precio)
+      setStock(producto.stock)
+      setStockMin(producto.stockMin)
+    } else {
+      setNombre('')
+      setCategoria('')
+      setCosto(null)
+      setPrecio(null)
+      setStock(null)
+      setStockMin(5)
+    }
+  }, [open, producto])
+
+  const margenPreview = costo && precio && precio > 0 ? margen({ costo, precio } as Producto) : null
+
+  function guardar() {
+    if (!nombre.trim()) return setError('Ponele un nombre al producto')
+    if (precio === null || precio <= 0) return setError('El precio de venta tiene que ser mayor a cero')
+
+    const datos = {
+      nombre: nombre.trim(),
+      categoria: categoria.trim() || 'Sin categoría',
+      costo: costo ?? 0,
+      precio,
+      stock: stock ?? 0,
+      stockMin: stockMin ?? 5,
+    }
+
+    if (producto) {
+      updateProducto(producto.id, datos)
+      toast('Producto actualizado')
+    } else {
+      addProducto(datos)
+      toast('Producto agregado')
+    }
+    onClose()
+  }
+
+  function eliminar() {
+    if (!producto) return
+    removeProducto(producto.id)
+    onClose()
+    toast('Producto eliminado', { tono: 'aviso' })
+  }
+
+  return (
+    <>
+      <Sheet
+        open={open}
+        onClose={onClose}
+        title={editando ? 'Editar producto' : 'Nuevo producto'}
+        footer={
+          <div className="flex gap-2.5">
+            {editando && (
+              <Button
+                variant="danger"
+                size="lg"
+                onClick={() => setConfirmando(true)}
+                aria-label="Eliminar producto"
+              >
+                <Trash2 className="size-[18px]" strokeWidth={1.9} />
+              </Button>
+            )}
+            <Button full size="lg" onClick={guardar}>
+              {editando ? 'Guardar cambios' : 'Agregar producto'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4 pb-2">
+          <Input
+            label="Nombre"
+            placeholder="Ej. Yerba 1kg"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            error={error}
+          />
+          <Input
+            label="Categoría"
+            placeholder="Ej. Almacén"
+            value={categoria}
+            onChange={(e) => setCategoria(e.target.value)}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <MoneyInput label="Costo" value={costo} onChange={setCosto} />
+            <MoneyInput label="Precio de venta" value={precio} onChange={setPrecio} />
+          </div>
+          {margenPreview !== null && (
+            <p className="text-[12.5px] text-ink-faint">
+              Margen: <span className="font-medium text-ink">{pct1(margenPreview)}</span>
+              {costo && precio ? ` · ganás ${money(precio - costo)} por unidad` : ''}
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Stock actual">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={stock ?? ''}
+                onChange={(e) => setStock(e.target.value === '' ? null : Number(e.target.value))}
+                className="h-12 w-full rounded-input border border-line-strong bg-surface-2 px-3.5 text-[15px] text-ink focus:border-accent-hi focus:bg-surface-3 focus:outline-none"
+              />
+            </Field>
+            <Field label="Stock mínimo" hint="Aviso de reponer por debajo de esto">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                value={stockMin ?? ''}
+                onChange={(e) => setStockMin(e.target.value === '' ? null : Number(e.target.value))}
+                className="h-12 w-full rounded-input border border-line-strong bg-surface-2 px-3.5 text-[15px] text-ink focus:border-accent-hi focus:bg-surface-3 focus:outline-none"
+              />
+            </Field>
+          </div>
+        </div>
+      </Sheet>
+
+      <ConfirmDialog
+        open={confirmando}
+        onClose={() => setConfirmando(false)}
+        onConfirm={eliminar}
+        title="¿Eliminar este producto?"
+        description={producto ? `Se va a borrar “${producto.nombre}” del catálogo.` : undefined}
+      />
+    </>
+  )
+}

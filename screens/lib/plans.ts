@@ -1,0 +1,101 @@
+import {
+  Boxes,
+  Brain,
+  Calculator,
+  Camera,
+  ChartColumn,
+  Coins,
+  House,
+  ReceiptText,
+  ScanLine,
+  Store,
+  Tags,
+  Users,
+  UsersRound,
+  Wallet,
+  Warehouse,
+  type LucideIcon,
+} from 'lucide-react'
+import type { PlanId } from './types'
+
+export interface FeaturePlan {
+  /** Cada línea lleva su propio ícono: nada de diez checks iguales. */
+  icon: LucideIcon
+  texto: string
+}
+
+export interface Plan {
+  id: PlanId
+  nombre: string
+  bajada: string
+  /** Precio mensual en pesos. 0 = gratis. */
+  mensual: number
+  /** Precio anual (equivale a 10 meses: dos meses bonificados). */
+  anual: number
+  icon: LucideIcon
+  features: FeaturePlan[]
+  badge?: string
+  /** El plan gratuito lleva espacios publicitarios. */
+  conAnuncios: boolean
+  /** El recomendado se destaca con borde, sombra y escala. */
+  recomendado?: boolean
+}
+
+export const PLANES: Record<PlanId, Plan> = {
+  hogar: {
+    id: 'hogar',
+    nombre: 'Hogar',
+    bajada: 'Para las cuentas de casa',
+    mensual: 0,
+    anual: 0,
+    icon: House,
+    conAnuncios: true,
+    features: [
+      { icon: Wallet, texto: 'Ingresos y gastos del mes' },
+      { icon: Camera, texto: 'Cargá tickets con una foto' },
+      { icon: ChartColumn, texto: 'Presupuesto por categoría' },
+      { icon: UsersRound, texto: 'Cuenta familiar compartida' },
+    ],
+  },
+  comercial: {
+    id: 'comercial',
+    nombre: 'Comercial',
+    bajada: 'Para tu negocio',
+    mensual: 8900,
+    anual: 89000,
+    icon: Store,
+    badge: 'Recomendado',
+    recomendado: true,
+    conAnuncios: false,
+    features: [
+      { icon: Coins, texto: 'Ventas y caja del día' },
+      { icon: Boxes, texto: 'Stock con alertas de faltante' },
+      { icon: Tags, texto: 'Catálogo con costos y margen' },
+      { icon: Users, texto: 'Empleados y permisos' },
+      { icon: ReceiptText, texto: 'Impuestos y vencimientos' },
+    ],
+  },
+  'comercial-pro': {
+    id: 'comercial-pro',
+    nombre: 'Comercial Pro',
+    bajada: 'Con Asistente IA',
+    mensual: 14900,
+    anual: 149000,
+    icon: Warehouse,
+    badge: 'IA',
+    conAnuncios: false,
+    features: [
+      { icon: Store, texto: 'Todo lo del plan Comercial' },
+      { icon: Calculator, texto: 'Estimación de impuestos con IA' },
+      { icon: Users, texto: 'Análisis de costos de personal' },
+      { icon: Tags, texto: 'Precio óptimo por producto' },
+      { icon: ScanLine, texto: 'Carga de facturas por foto' },
+      { icon: Brain, texto: 'Asistente por chat y audio' },
+    ],
+  },
+}
+
+export const ORDEN_PLANES: PlanId[] = ['hogar', 'comercial', 'comercial-pro']
+
+export const esComercial = (plan: PlanId) => plan === 'comercial' || plan === 'comercial-pro'
+export const esPro = (plan: PlanId) => plan === 'comercial-pro'

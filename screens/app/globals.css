@@ -1,0 +1,182 @@
+@import 'tailwindcss';
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Rindo — sistema de diseño
+   Reglas que están horneadas acá a propósito:
+   · nunca blanco puro (#FFFFFF) ni negro puro (#000000)
+   · acento azul petróleo serio, jamás celeste eléctrico
+   · CERO violeta / magenta / púrpura en toda la paleta
+   · tipografía Manrope (texto) + Space Grotesk (números destacados)
+   ───────────────────────────────────────────────────────────────────────── */
+
+@theme {
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-grotesk), var(--font-manrope), ui-sans-serif, sans-serif;
+
+  /* Fondos */
+  --color-bg: #121212;
+  --color-bg-sunken: #0c0c0c;
+  --color-surface: #1a1a1a;
+  --color-surface-2: #222222;
+  --color-surface-3: #2c2c2c;
+
+  /* Hairlines */
+  --color-line: #2a2a2a;
+  --color-line-strong: #3a3a3a;
+
+  /* Texto */
+  --color-ink: #f2f2f2;
+  --color-ink-muted: #9a9a9a;
+  --color-ink-faint: #6b6b6b;
+  /* Placeholder: ink-faint daba ~3,3:1 sobre surface-2, por debajo del 4,5:1
+     que pide WCAG AA para texto normal. Este tono llega a ~5:1. */
+  --color-placeholder: #8d8d8d;
+
+  /* Acento — azul petróleo */
+  --color-accent: #1d5c6e;
+  --color-accent-hi: #2a83a0;
+  --color-accent-lo: #164a58;
+  --color-accent-dim: #123039;
+  --color-accent-ink: #eaf6fa;
+
+  /* Semánticos */
+  --color-pos: #22c55e;
+  --color-pos-dim: #12301f;
+  --color-neg: #ef4444;
+  --color-neg-dim: #331616;
+  --color-warn: #f59e0b;
+  --color-warn-dim: #33260c;
+
+  /* Colores de categoría — absolutos, no cambian con el tema. Todos dentro de
+     un rango tierra/frío: ni un solo tinte violeta o magenta. */
+  --color-cat-teal: #2a9d8f;
+  --color-cat-arena: #c9a227;
+  --color-cat-oliva: #7f9b53;
+  --color-cat-ladrillo: #c4553b;
+
+  /* Radios — todo redondeado, escala consistente */
+  --radius-input: 0.875rem; /* 14px */
+  --radius-card: 1rem; /* 16px */
+  --radius-sheet: 1.5rem;
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Variantes de tema ─────────────────────────────────────────────────────
+   Se aplican con data-theme en <html>. Sobrescriben las mismas variables que
+   consumen todas las utilidades de Tailwind, así el cambio es real y en vivo.
+   Las tres viven en la misma familia seria: gris oscuro + acento sobrio. */
+
+[data-theme='medianoche'] {
+  --color-bg: #101318;
+  --color-bg-sunken: #0a0c10;
+  --color-surface: #191d24;
+  --color-surface-2: #212630;
+  --color-surface-3: #2b313c;
+  --color-line: #262c36;
+  --color-line-strong: #363e4a;
+  --color-ink: #eef1f5;
+  --color-ink-muted: #98a0ac;
+  --color-ink-faint: #6a7280;
+  --color-placeholder: #8c94a0;
+  --color-accent: #1e4e6b;
+  --color-accent-hi: #2c7398;
+  --color-accent-lo: #173e56;
+  --color-accent-dim: #112a3a;
+  --color-accent-ink: #e8f2f9;
+}
+
+[data-theme='grafito'] {
+  --color-bg: #121413;
+  --color-bg-sunken: #0b0d0c;
+  --color-surface: #1b1e1d;
+  --color-surface-2: #232726;
+  --color-surface-3: #2d3231;
+  --color-line: #2a2f2e;
+  --color-line-strong: #3a403f;
+  --color-ink: #f0f2f1;
+  --color-ink-muted: #98a09d;
+  --color-ink-faint: #6a716f;
+  --color-placeholder: #8c9490;
+  --color-accent: #14746f;
+  --color-accent-hi: #1d9b93;
+  --color-accent-lo: #0f5a57;
+  --color-accent-dim: #0d3230;
+  --color-accent-ink: #e6f5f3;
+}
+
+/* ── Base ─────────────────────────────────────────────────────────────── */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg-sunken);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overscroll-behavior-y: none;
+}
+
+/* Los números no deben bailar mientras se animan. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent-hi);
+  outline-offset: 2px;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* La app vive en una columna de ancho fijo. Todo lo `fixed` (tab bar, barras
+   de acción, FAB) se alinea a esa columna y no al viewport, si no en desktop
+   se derrama a lo ancho de la pantalla. */
+:root {
+  --app-col: 440px;
+}
+
+.app-col {
+  width: 100%;
+  max-width: var(--app-col);
+  margin-inline: auto;
+}
+
+/* El dashboard es una app mobile-first y vive siempre en la columna de 440px.
+   La pantalla pública (login y planes) es otra cosa: en desktop necesita el
+   ancho para mostrar los tres planes lado a lado en vez de apilados en una
+   columna angosta. Se marca con data-pantalla="publica" y el contenedor la
+   deja crecer. */
+@media (min-width: 1024px) {
+  .app-col:has([data-pantalla='publica']) {
+    max-width: 1100px;
+  }
+}
+
+/* Respetar la preferencia de movimiento reducido en toda la app. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes rd-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
