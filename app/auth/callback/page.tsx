@@ -14,34 +14,35 @@ import { createClient } from '@/lib/supabase/client'
  * eso usamos el link por defecto (`{{ .ConfirmationURL }}`) con el flujo PKCE
  * que fuerza `@supabase/ssr`: ese link pega primero contra el servidor de
  * Supabase, que valida el token y redirige acá con un `?code=...` en la URL.
- * Hay que canjear ese code por una sesión con `exchangeCodeForSession` —
- * necesita el "code verifier" que el propio navegador guardó en una cookie
- * al llamar `signUp()`/`resetPasswordForEmail()`, así que el link sólo
- * funciona si se abre en el mismo navegador donde se inició el trámite.
+ *
+ * Importante: NO hay que canjear ese `code` a mano. El cliente de Supabase ya
+ * lo detecta y lo canjea solo apenas se crea (`detectSessionInUrl`), porque
+ * el flujo es PKCE. Un segundo canje manual falla siempre, porque el código
+ * sirve una sola vez. Sólo hace falta escuchar cuándo la sesión quedó lista.
+ *
+ * Como es PKCE, el link sólo funciona si se abre en el mismo navegador donde
+ * se inició el trámite — ahí es donde vive el "code verifier" guardado.
  */
 export default function AuthCallbackPage() {
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const code = params.get('code')
-    const esRecovery = params.get('next') === 'recovery'
-
-    if (!code) {
-      setError(true)
-      return
-    }
-
+    const esRecovery = new URLSearchParams(window.location.search).get('next') === 'recovery'
     const supabase = createClient()
-    supabase.auth.exchangeCodeForSession(code).then(({ data, error: exchangeError }) => {
-      if (exchangeError || !data.session) {
-        setError(true)
-        return
-      }
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) return
       // Navegación dura (no router.push): así el servidor recibe la cookie
       // de sesión recién escrita en esta misma carga, no una request en caché.
       window.location.href = esRecovery ? '/auth/actualizar-password' : '/dashboard'
     })
+
+    const timeout = setTimeout(() => setError(true), 6000)
+
+    return () => {
+      sub.subscription.unsubscribe()
+      clearTimeout(timeout)
+    }
   }, [])
 
   if (error) {
