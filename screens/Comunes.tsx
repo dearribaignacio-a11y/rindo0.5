@@ -349,7 +349,16 @@ export function PantallaPlanes({ db }: { db: DB }) {
   const [cambiando, setCambiando] = useState<PlanId | null>(null)
 
   function cambiar(pid: PlanId) {
-    if (pid === actual || !db.perfil) return
+    if (pid === actual) return
+    if (!db.perfil) {
+      // No debería pasar en uso normal: `perfil` se crea en el setup inicial.
+      // Si igual falta (otro navegador, datos borrados), al menos avisamos en
+      // vez de quedarnos mudos — antes esto no hacía nada ni decía por qué.
+      toast('No encontramos tu perfil en este navegador. Cerrá sesión y volvé a entrar.', {
+        tono: 'aviso',
+      })
+      return
+    }
     setCambiando(pid)
     setTimeout(() => {
       updatePerfil({ plan: pid })
