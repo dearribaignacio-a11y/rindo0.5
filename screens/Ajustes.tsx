@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Bell,
   ChevronRight,
@@ -28,14 +29,27 @@ import { AdSlot } from '@/components/AdSlot'
 import { useNav } from '@/components/nav'
 import { PLANES, esComercial } from '@/lib/plans'
 import { resetDB, updateAjustes, updateFlags } from '@/lib/storage'
+import { createClient } from '@/lib/supabase/client'
 import { TEMAS } from '@/lib/temas'
 import { cn } from '@/lib/cn'
 import type { DB } from '@/lib/types'
 
 export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => void }) {
   const nav = useNav()
+  const router = useRouter()
   const toast = useToast()
   const [borrando, setBorrando] = useState(false)
+  const [cerrando, setCerrando] = useState(false)
+
+  async function cerrarSesion() {
+    setCerrando(true)
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    updateFlags({ sesionIniciada: false })
+    onCerrarSesion()
+    router.push('/login')
+    router.refresh()
+  }
 
   const perfil = db.perfil
   const plan = perfil?.plan ?? 'hogar'
@@ -181,11 +195,9 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
 
         <button
           type="button"
-          onClick={() => {
-            updateFlags({ sesionIniciada: false })
-            onCerrarSesion()
-          }}
-          className="mt-6 flex w-full items-center justify-center gap-2 py-3 text-[14px] text-ink-muted transition-colors hover:text-ink"
+          disabled={cerrando}
+          onClick={cerrarSesion}
+          className="mt-6 flex w-full items-center justify-center gap-2 py-3 text-[14px] text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
         >
           <LogOut className="size-[17px]" strokeWidth={1.9} />
           Cerrar sesión

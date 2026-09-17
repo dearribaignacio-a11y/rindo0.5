@@ -18,8 +18,6 @@ import { TabBar, type TabDef } from '@/components/ui/TabBar'
 import { ToastProvider } from '@/components/ui/Toast'
 import { Logo } from '@/components/ui/Logo'
 import { NavProvider, useNav } from '@/components/nav'
-import { Login } from '@/screens/Login'
-import { SetupWizard } from '@/screens/SetupWizard'
 import { Onboarding } from '@/screens/Onboarding'
 import { Ajustes } from '@/screens/Ajustes'
 import {
@@ -47,23 +45,23 @@ import { ProPersonal } from '@/screens/pro/Personal'
 import { ProImpuestos } from '@/screens/pro/Impuestos'
 import { ProChat } from '@/screens/pro/Chat'
 import { useDB, useMontado } from '@/lib/hooks'
-import { aplicarTema, sembrar, updateFlags } from '@/lib/storage'
+import { aplicarTema, updateFlags } from '@/lib/storage'
 import { esPro } from '@/lib/plans'
-import type { DB, Perfil, PlanId } from '@/lib/types'
+import type { DB, PlanId } from '@/lib/types'
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Shell de la app.
+   Shell de la app, montado detrás de `/dashboard` — ahí ya hay una sesión
+   real de Supabase verificada en el servidor. Login, alta y elección de
+   plan viven aparte, en `/login` (ver `screens/AuthFlow.tsx`).
 
-   Rindo corre entera en el cliente sobre localStorage, así que el árbol vive
-   dentro de un único Client Component. Las rutas de Next quedan reservadas
-   para los Route Handlers de `app/api`, que son los que sí necesitan servidor.
+   La app en sí sigue corriendo entera en el cliente sobre localStorage: el
+   árbol vive dentro de un único Client Component. Las rutas de Next quedan
+   para lo que sí necesita servidor (auth, y los Route Handlers de `app/api`).
    ══════════════════════════════════════════════════════════════════════════ */
 
 export function Rindo() {
   const db = useDB()
   const montado = useMontado()
-  /** Plan y email elegidos en el login, hasta que el setup crea el perfil. */
-  const [pendiente, setPendiente] = useState<{ plan: PlanId; email: string } | null>(null)
 
   // Antes de montar no sabemos qué hay en localStorage: renderizar cualquier
   // pantalla acá provocaría un desajuste de hidratación.
@@ -74,32 +72,6 @@ export function Rindo() {
   return (
     <ToastProvider>
       <AnimatePresence mode="wait" initial={false}>
-        {fase === 'login' && (
-          <ScreenTransition key="login">
-            <Login
-              planActual={db.perfil?.plan}
-              onEntrar={(plan, email) => {
-                setPendiente({ plan, email })
-                updateFlags({ sesionIniciada: true })
-              }}
-            />
-          </ScreenTransition>
-        )}
-
-        {fase === 'setup' && (
-          <ScreenTransition key="setup">
-            <SetupWizard
-              plan={pendiente?.plan ?? 'hogar'}
-              email={pendiente?.email ?? ''}
-              onVolver={() => updateFlags({ sesionIniciada: false })}
-              onListo={(perfil: Perfil) => {
-                sembrar(perfil)
-                updateFlags({ setupHecho: true })
-              }}
-            />
-          </ScreenTransition>
-        )}
-
         {fase === 'onboarding' && (
           <ScreenTransition key="onboarding">
             <Onboarding
@@ -121,11 +93,9 @@ export function Rindo() {
   )
 }
 
-type Fase = 'login' | 'setup' | 'onboarding' | 'app'
+type Fase = 'onboarding' | 'app'
 
 function faseActual(db: DB): Fase {
-  if (!db.flags.sesionIniciada) return 'login'
-  if (!db.flags.setupHecho || !db.perfil) return 'setup'
   if (!db.flags.onboardingVisto) return 'onboarding'
   return 'app'
 }

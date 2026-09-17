@@ -12,6 +12,10 @@ import { BottomBar } from '@/components/ui/BottomBar'
 import { ANTIGUEDADES, RANGOS_EMPLEADOS, RUBROS } from '@/lib/seed'
 import { PLANES } from '@/lib/plans'
 import { cn } from '@/lib/cn'
+import { createClient } from '@/lib/supabase/client'
+import { mapAuthError } from '@/lib/supabase/errores'
+import { planADB } from '@/lib/supabase/types'
+import { sembrar, updateFlags } from '@/lib/storage'
 import type { Perfil, PlanId } from '@/lib/types'
 
 const MONEDAS = [
@@ -25,16 +29,25 @@ const MONEDAS = [
  * Es un wizard de tres pasos y no un formulario largo: son datos que el
  * usuario tipea con una mano, parado en el mostrador. Cada paso pide como
  * mucho dos cosas y el avance está bloqueado sólo por lo imprescindible.
+ *
+ * El alta real de la cuenta (`supabase.auth.signUp()`) se dispara al
+ * confirmar el último paso: recién ahí están juntos nombre, negocio y
+ * teléfono para mandarlos como metadatos, que es lo que lee el trigger
+ * `handle_new_user` para crear la fila en `profiles`.
  */
 export function SetupWizard({
   plan,
   email,
-  onListo,
+  password,
+  onCreada,
   onVolver,
 }: {
   plan: PlanId
   email: string
-  onListo: (perfil: Perfil) => void
+  password: string
+  /** `necesitaConfirmar` es `true` cuando Supabase todavía no abrió sesión —
+   *  hay que esperar a que confirmen el correo. */
+  onCreada: (necesitaConfirmar: boolean) => void
   onVolver: () => void
 }) {
   const comercial = plan !== 'hogar'
@@ -54,6 +67,8 @@ export function SetupWizard({
   const [ciudad, setCiudad] = useState('San Juan')
   const [logo, setLogo] = useState<string | undefined>()
 
+  /* Común a los dos planes */
+  const [telefono, setTelefono] = useState('')
   const [moneda, setMoneda] = useState('ARS')
   const [error, setError] = useState<string>()
 
@@ -65,13 +80,15 @@ export function SetupWizard({
       if (paso === 0 && negocio.trim().length < 2) return 'Poné el nombre de tu negocio'
       if (paso === 1 && (!antiguedad || !empleadosRango)) return 'Elegí una opción en cada pregunta'
       if (paso === 2 && ciudad.trim().length < 2) return 'Indicá tu ciudad o localidad'
+      if (paso === 2 && telefono.trim().length < 6) return 'Ingresá un teléfono válido'
       return null
     }
     if (paso === 0 && nombre.trim().length < 2) return 'Escribí tu nombre'
+    if (paso === 2 && telefono.trim().length < 6) return 'Ingresá un teléfono válido'
     return null
-  }, [comercial, paso, negocio, antiguedad, empleadosRango, ciudad, nombre])
+  }, [comercial, paso, negocio, antiguedad, empleadosRango, ciudad, telefono, nombre])
 
-  function avanzar() {
+  async function avanzar() {
     if (bloqueo) {
       setError(bloqueo)
       return
@@ -82,10 +99,32 @@ export function SetupWizard({
       return
     }
 
+    const nombreApellido = comercial ? nombre.trim() || 'Dueño/a' : nombre.trim()
+
     setGuardando(true)
+    const supabase = createClient()
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          nombre_apellido: nombreApellido,
+          nombre_negocio: comercial ? negocio.trim() : null,
+          telefono: telefono.trim(),
+          plan: planADB(plan),
+        },
+      },
+    })
+
+    if (signUpError) {
+      setGuardando(false)
+      setError(mapAuthError(signUpError))
+      return
+    }
+
     const perfil: Perfil = comercial
       ? {
-          nombre: nombre.trim() || 'Dueño/a',
+          nombre: nombreApellido,
           email,
           plan,
           moneda,
@@ -97,14 +136,21 @@ export function SetupWizard({
           logo,
         }
       : {
-          nombre: nombre.trim(),
+          nombre: nombreApellido,
           email,
           plan,
           moneda,
           integrantes,
           ingresoMensual: ingreso ?? undefined,
         }
-    setTimeout(() => onListo(perfil), 420)
+
+    // Semilla local de datos de ejemplo — sigue viviendo en este dispositivo
+    // hasta que la migración de Productos/Movimientos/Stock a Supabase esté
+    // hecha (ver prompt de empresa/empleados).
+    sembrar(perfil)
+    updateFlags({ sesionIniciada: true, setupHecho: true })
+
+    onCreada(!data.session)
   }
 
   function retroceder() {
@@ -165,6 +211,8 @@ export function SetupWizard({
                 setNombre={setNombre}
                 moneda={moneda}
                 setMoneda={setMoneda}
+                telefono={telefono}
+                setTelefono={setTelefono}
               />
             ) : (
               <PasosHogar
@@ -177,6 +225,8 @@ export function SetupWizard({
                 setIngreso={setIngreso}
                 moneda={moneda}
                 setMoneda={setMoneda}
+                telefono={telefono}
+                setTelefono={setTelefono}
               />
             )}
           </motion.div>
@@ -218,6 +268,8 @@ function PasosHogar({
   setIngreso,
   moneda,
   setMoneda,
+  telefono,
+  setTelefono,
 }: {
   paso: number
   nombre: string
@@ -228,6 +280,8 @@ function PasosHogar({
   setIngreso: (v: number | null) => void
   moneda: string
   setMoneda: (v: string) => void
+  telefono: string
+  setTelefono: (v: string) => void
 }) {
   if (paso === 0) {
     return (
@@ -282,12 +336,20 @@ function PasosHogar({
 
   return (
     <>
-      <Titulo bajada="Es opcional: si todavía no lo tenés claro, seguí y cargalo más adelante.">
-        ¿Cuánto entra por mes?
+      <Titulo bajada="El teléfono es para avisos de la cuenta; el ingreso es opcional y lo podés cargar más adelante.">
+        Últimos datos
       </Titulo>
       <div className="space-y-4">
+        <Input
+          label="Teléfono / WhatsApp"
+          placeholder="Ej. 264 555 1234"
+          inputMode="tel"
+          autoComplete="tel"
+          value={telefono}
+          onChange={(e) => setTelefono(e.target.value)}
+        />
         <MoneyInput
-          label="Ingreso mensual fijo"
+          label="Ingreso mensual fijo (opcional)"
           hint="Sueldo, jubilación o lo que entre todos los meses."
           value={ingreso}
           onChange={setIngreso}
@@ -323,6 +385,8 @@ function PasosComercio({
   setNombre,
   moneda,
   setMoneda,
+  telefono,
+  setTelefono,
 }: {
   paso: number
   negocio: string
@@ -341,6 +405,8 @@ function PasosComercio({
   setNombre: (v: string) => void
   moneda: string
   setMoneda: (v: string) => void
+  telefono: string
+  setTelefono: (v: string) => void
 }) {
   if (paso === 0) {
     return (
@@ -403,6 +469,14 @@ function PasosComercio({
           placeholder="Ej. Rivadavia, San Juan"
           value={ciudad}
           onChange={(e) => setCiudad(e.target.value)}
+        />
+        <Input
+          label="Teléfono / WhatsApp"
+          placeholder="Ej. 264 555 1234"
+          inputMode="tel"
+          autoComplete="tel"
+          value={telefono}
+          onChange={(e) => setTelefono(e.target.value)}
         />
         <Input
           label="Tu nombre (opcional)"

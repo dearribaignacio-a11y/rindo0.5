@@ -1,16 +1,13 @@
-import { Rindo } from '@/screens/Rindo'
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 
-/**
- * Única página de la app. Todo el estado vive en el cliente (localStorage),
- * así que la ruta sólo monta el shell; las funciones serverless de Vercel
- * son los Route Handlers de `app/api`.
- */
-export default function Page() {
-  return (
-    <div className="min-h-dvh bg-bg-sunken">
-      <div className="app-col min-h-dvh bg-bg shadow-[0_0_80px_rgba(0,0,0,0.45)]">
-        <Rindo />
-      </div>
-    </div>
-  )
+/** Sólo decide a dónde mandar según haya o no sesión — el contenido real
+ *  vive en `/login` (público) y `/dashboard` (protegido). */
+export default async function Page() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  redirect(user ? '/dashboard' : '/login')
 }

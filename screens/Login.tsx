@@ -12,36 +12,14 @@ import { Sheet } from '@/components/ui/Sheet'
 import { ORDEN_PLANES, PLANES } from '@/lib/plans'
 import { money } from '@/lib/format'
 import { cn } from '@/lib/cn'
+import { createClient } from '@/lib/supabase/client'
+import { mapAuthError } from '@/lib/supabase/errores'
+import { PASS_MIN, emailValido, errorPassword, passwordValida } from '@/lib/validacion'
 import type { PlanId } from '@/lib/types'
 
 type Ciclo = 'mensual' | 'anual'
 type Modo = 'ingresar' | 'crear'
 type Paso = 'datos' | 'plan'
-
-/**
- * Política de contraseñas. Rindo maneja plata de un negocio, así que el
- * mínimo de 6 sin exigencia de composición se quedaba corto.
- *
- * TODO: confirmar con el cliente. Se eligió 8 caracteres con al menos una
- * letra y un número — el piso habitual sin volverse hostil en un teclado de
- * celular. Si más adelante se suma un medidor de fuerza, conviene permitir
- * passphrases largas sin exigir símbolos.
- *
- * IMPORTANTE: esta validación es sólo de cliente y se puede saltear. La misma
- * regla tiene que estar implementada en el backend cuando exista.
- */
-const PASS_MIN = 8
-const tieneLetra = (s: string) => /[a-zA-Z]/.test(s)
-const tieneNumero = (s: string) => /\d/.test(s)
-const passwordValida = (s: string) => s.length >= PASS_MIN && tieneLetra(s) && tieneNumero(s)
-
-function errorPassword(s: string) {
-  if (s.length < PASS_MIN) return `Mínimo ${PASS_MIN} caracteres`
-  if (!tieneLetra(s) || !tieneNumero(s)) return 'Combiná letras y números'
-  return undefined
-}
-
-const emailValido = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s)
 
 interface Errores {
   email?: string
@@ -59,16 +37,22 @@ interface Errores {
  * tenía no entendía qué iba a pasar al tocar el botón. Ahora "Ingresar" pide
  * sólo credenciales, y "Crear cuenta" es un paso de datos seguido del paso de
  * elección de plan.
+ *
+ * El alta real (`supabase.auth.signUp()`) no ocurre acá: recién se dispara al
+ * final de `SetupWizard`, que es donde se termina de juntar nombre, negocio y
+ * teléfono para mandarlos como metadatos del `signUp()`. Esta pantalla sólo
+ * junta credenciales y, si es alta nueva, el plan elegido.
  */
 export function Login({
-  onEntrar,
-  planActual,
+  onIngreso,
+  onCrearCuenta,
 }: {
-  onEntrar: (plan: PlanId, email: string) => void
-  /** Si ya hay cuenta, el plan vigente arranca marcado. */
-  planActual?: PlanId
+  /** Login con cuenta existente confirmado contra Supabase. */
+  onIngreso: () => void
+  /** Datos + plan listos: falta el paso de `SetupWizard` antes del alta real. */
+  onCrearCuenta: (plan: PlanId, email: string, password: string) => void
 }) {
-  const [modo, setModo] = useState<Modo>(planActual ? 'ingresar' : 'crear')
+  const [modo, setModo] = useState<Modo>('ingresar')
   const [paso, setPaso] = useState<Paso>('datos')
 
   const [email, setEmail] = useState('')
@@ -76,8 +60,8 @@ export function Login({
   const [password2, setPassword2] = useState('')
   const [errores, setErrores] = useState<Errores>({})
   const [ciclo, setCiclo] = useState<Ciclo>('mensual')
-  const [plan, setPlan] = useState<PlanId>(planActual ?? 'comercial')
-  const [cargando, setCargando] = useState<PlanId | 'sesion' | null>(null)
+  const [plan, setPlan] = useState<PlanId>('comercial')
+  const [cargando, setCargando] = useState<'sesion' | null>(null)
   const [recuperando, setRecuperando] = useState(false)
 
   const refEmail = useRef<HTMLInputElement>(null)
@@ -106,7 +90,7 @@ export function Login({
     return !e.email && !e.password && !e.password2
   }
 
-  function enviarDatos(ev: React.FormEvent) {
+  async function enviarDatos(ev: React.FormEvent) {
     ev.preventDefault()
     if (!validarDatos()) return
 
@@ -115,28 +99,25 @@ export function Login({
       return
     }
 
-    // TODO: confirmar con el cliente. Acá va el POST a /api/auth/login contra
-    // el backend. Hoy no hay servidor de cuentas: lo único que sabemos es si
-    // este navegador ya tiene un perfil creado, así que no podemos afirmar que
-    // la cuenta no existe — sólo que no podemos verificarla todavía.
-    if (!planActual) {
-      setErrores({
-        general:
-          'Todavía no podemos verificar esa cuenta. Si es la primera vez que usás Rindo, creá tu cuenta.',
-      })
+    setCargando('sesion')
+    const supabase = createClient()
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    setCargando(null)
+
+    if (error) {
+      setErrores({ general: mapAuthError(error) })
       return
     }
 
-    setCargando('sesion')
-    setTimeout(() => onEntrar(planActual, email), 560)
+    onIngreso()
   }
 
   function elegirPlan(pid: PlanId) {
     setPlan(pid)
-    setCargando(pid)
-    // TODO: confirmar con el cliente. Acá va el alta real (POST /api/auth/signup)
-    // y, para los planes pagos, el redirect a la pasarela de pago.
-    setTimeout(() => onEntrar(pid, email), 560)
+    // El alta real se dispara al final de SetupWizard, una vez juntados
+    // nombre/negocio/teléfono: ahí recién hay metadatos completos para el
+    // signUp(). Acá sólo pasamos la posta con lo que ya tenemos.
+    onCrearCuenta(pid, email, password)
   }
 
   return (
@@ -307,7 +288,6 @@ export function Login({
                 onCiclo={setCiclo}
                 plan={plan}
                 onPlan={setPlan}
-                cargando={cargando}
                 onElegir={elegirPlan}
                 onVolver={() => setPaso('datos')}
               />
@@ -333,7 +313,6 @@ function PasoPlanes({
   onCiclo,
   plan,
   onPlan,
-  cargando,
   onElegir,
   onVolver,
 }: {
@@ -342,7 +321,6 @@ function PasoPlanes({
   onCiclo: (c: Ciclo) => void
   plan: PlanId
   onPlan: (p: PlanId) => void
-  cargando: PlanId | 'sesion' | null
   onElegir: (p: PlanId) => void
   onVolver: () => void
 }) {
@@ -387,7 +365,6 @@ function PasoPlanes({
             plan={pid}
             ciclo={ciclo}
             seleccionado={plan === pid}
-            cargando={cargando === pid}
             onSeleccionar={() => onPlan(pid)}
             onElegir={() => onElegir(pid)}
           />
@@ -410,14 +387,12 @@ function TarjetaPlan({
   plan,
   ciclo,
   seleccionado,
-  cargando,
   onSeleccionar,
   onElegir,
 }: {
   plan: PlanId
   ciclo: Ciclo
   seleccionado: boolean
-  cargando: boolean
   onSeleccionar: () => void
   onElegir: () => void
 }) {
@@ -523,7 +498,6 @@ function TarjetaPlan({
       <Button
         full
         size="md"
-        loading={cargando}
         className="mt-4 lg:mt-auto"
         // Los tres botones decían "Elegir plan": fuera de contexto, un lector
         // de pantalla escuchaba tres veces lo mismo sin saber cuál era cuál.
@@ -644,6 +618,7 @@ function RecuperarSheet({
   const [email, setEmail] = useState(emailInicial)
   const [error, setError] = useState<string | undefined>()
   const [enviado, setEnviado] = useState(false)
+  const [enviando, setEnviando] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -652,16 +627,21 @@ function RecuperarSheet({
     setEnviado(false)
   }, [open, emailInicial])
 
-  function enviar(ev: React.FormEvent) {
+  async function enviar(ev: React.FormEvent) {
     ev.preventDefault()
     if (!emailValido(email)) {
       setError('Ingresá un email válido')
       return
     }
     setError(undefined)
-    // TODO: confirmar con el cliente. Acá va el POST a /api/auth/recuperar.
-    // La respuesta no debe revelar si el email existe o no, para no filtrar
-    // qué cuentas están registradas.
+    setEnviando(true)
+    const supabase = createClient()
+    // La respuesta de Supabase no revela si el email existe o no — el mensaje
+    // de "enviado" es siempre el mismo, así no se filtra qué cuentas existen.
+    await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/confirm?type=recovery`,
+    })
+    setEnviando(false)
     setEnviado(true)
   }
 
@@ -705,7 +685,7 @@ function RecuperarSheet({
           <div aria-live="polite" className="sr-only">
             {error}
           </div>
-          <Button full size="lg" type="submit" className="mt-4">
+          <Button full size="lg" type="submit" loading={enviando} className="mt-4">
             Enviar link
           </Button>
         </form>
