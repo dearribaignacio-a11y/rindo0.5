@@ -107,6 +107,11 @@ export function SetupWizard({
       email,
       password,
       options: {
+        // El plan gratuito de Supabase no deja personalizar el HTML del
+        // email de confirmación, así que usamos el link por defecto y lo
+        // hacemos aterrizar en nuestro propio callback (ver
+        // `app/auth/callback/page.tsx`) en vez del template.
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
         data: {
           nombre_apellido: nombreApellido,
           nombre_negocio: comercial ? negocio.trim() : null,

@@ -3,12 +3,17 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 /**
- * Destino de los links de confirmación de email y de recuperación de
- * contraseña que manda Supabase. Requiere que la plantilla de cada correo
- * (Authentication → Email Templates, en el dashboard de Supabase) use
- * `token_hash` en vez de `ConfirmationURL`:
+ * Ruta alternativa para el link de confirmación/recuperación, para cuando el
+ * proyecto de Supabase esté en un plan que permita editar el HTML de los
+ * emails (el plan gratuito bloquea el editor de "Source" de los templates).
+ * Ahí sí conviene este flujo por servidor con `token_hash`, cambiando la
+ * plantilla del correo para que apunte acá:
  *
  *   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type={{ .Type }}
+ *
+ * Mientras el proyecto esté en el plan gratuito, el flujo activo es
+ * `app/auth/callback/page.tsx`, que usa el link por defecto sin tocar el
+ * template.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
