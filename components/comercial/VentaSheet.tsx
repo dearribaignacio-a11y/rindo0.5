@@ -55,22 +55,26 @@ export function VentaSheet({
     setMetodo('efectivo')
   }
 
-  function confirmar() {
+  async function confirmar() {
     if (items.length === 0) return toast('Agregá al menos un producto', 'aviso')
-    addVenta({
-      fecha: ahoraISO(),
-      items: items.map((i) => ({
-        productoId: i.producto.id,
-        nombre: i.producto.nombre,
-        cantidad: i.cantidad,
-        precio: i.producto.precio,
-      })),
-      total,
-      metodo,
-    })
-    toast('Venta registrada')
-    resetear()
-    onClose()
+    try {
+      await addVenta({
+        fecha: ahoraISO(),
+        items: items.map((i) => ({
+          productoId: i.producto.id,
+          nombre: i.producto.nombre,
+          cantidad: i.cantidad,
+          precio: i.producto.precio,
+        })),
+        total,
+        metodo,
+      })
+      toast('Venta registrada')
+      resetear()
+      onClose()
+    } catch {
+      toast('No pudimos registrar la venta. Probá de nuevo.', 'aviso')
+    }
   }
 
   return (

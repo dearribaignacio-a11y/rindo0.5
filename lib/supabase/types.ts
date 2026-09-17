@@ -60,6 +60,59 @@ export type EmpleadoRow = {
   updated_at: string
 }
 
+/** Fila de la tabla `productos`. */
+export type ProductoRow = {
+  id: string
+  user_id: string
+  nombre: string
+  categoria: string
+  costo: number
+  precio: number
+  stock: number
+  stock_min: number
+  created_at: string
+  updated_at: string
+}
+
+/** Item de una venta o reposición — se guarda como jsonb, no como filas
+ *  propias: es un detalle chico y de sólo lectura una vez cargado. */
+export type ItemVentaJSON = {
+  productoId: string
+  nombre: string
+  cantidad: number
+  precio: number
+}
+
+export type ItemReposicionJSON = {
+  productoId: string | null
+  nombre: string
+  cantidad: number
+  costo: number
+  autoDetectado?: boolean
+}
+
+/** Fila de la tabla `ventas`. */
+export type VentaRow = {
+  id: string
+  user_id: string
+  fecha: string
+  items: ItemVentaJSON[]
+  total: number
+  metodo: 'efectivo' | 'tarjeta' | 'transferencia'
+  created_at: string
+}
+
+/** Fila de la tabla `reposiciones`. */
+export type ReposicionRow = {
+  id: string
+  user_id: string
+  fecha: string
+  items: ItemReposicionJSON[]
+  total: number
+  origen: 'manual' | 'foto'
+  created_at: string
+}
+
 /** Tipado mínimo de la base para el cliente tipado de Supabase. Sólo declara
  *  lo que las migraciones crean; se amplía a medida que se agreguen tablas.
  *  `Relationships`, `Views` y `Functions` están vacíos a propósito — nada acá
@@ -84,6 +137,24 @@ export type Database = {
         Row: EmpleadoRow
         Insert: Partial<EmpleadoRow> & { user_id: string; empresa_id: string; nombre_apellido: string }
         Update: Partial<EmpleadoRow>
+        Relationships: []
+      }
+      productos: {
+        Row: ProductoRow
+        Insert: Partial<ProductoRow> & { user_id: string; precio: number }
+        Update: Partial<ProductoRow>
+        Relationships: []
+      }
+      ventas: {
+        Row: VentaRow
+        Insert: Partial<VentaRow> & { user_id: string; fecha: string; metodo: VentaRow['metodo'] }
+        Update: Partial<VentaRow>
+        Relationships: []
+      }
+      reposiciones: {
+        Row: ReposicionRow
+        Insert: Partial<ReposicionRow> & { user_id: string; fecha: string; origen: ReposicionRow['origen'] }
+        Update: Partial<ReposicionRow>
         Relationships: []
       }
     }

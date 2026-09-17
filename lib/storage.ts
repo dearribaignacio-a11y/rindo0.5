@@ -33,6 +33,7 @@ import type {
 import { seedComercial, seedHogar } from './seed'
 import { ahoraISO, hoyISO } from './format'
 import * as negocio from './supabase/negocio'
+import * as operaciones from './supabase/operaciones'
 
 const KEY = 'rindo.db'
 const THEME_KEY = 'rindo.theme'
@@ -73,11 +74,15 @@ function leerDisco(): DB {
     return {
       ...dbVacia(),
       ...parsed,
-      // Empresa y empleados viven en Supabase, no acá — arrancan vacíos hasta
-      // que `hidratarNegocio()` los trae, aunque una versión vieja de este
+      // Empresa, empleados, productos, ventas y reposiciones viven en
+      // Supabase, no acá — arrancan vacíos hasta que `hidratarNegocio()` /
+      // `hidratarOperaciones()` los traen, aunque una versión vieja de este
       // mismo documento los tuviera guardados.
       empresa: null,
       empleados: [],
+      productos: [],
+      ventas: [],
+      reposiciones: [],
       version: VERSION,
     }
   } catch {
@@ -89,7 +94,7 @@ function escribirDisco(db: DB) {
   if (typeof window === 'undefined') return
   try {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { empresa, empleados, ...persistible } = db
+    const { empresa, empleados, productos, ventas, reposiciones, ...persistible } = db
     window.localStorage.setItem(KEY, JSON.stringify(persistible))
   } catch {
     // Cuota llena o modo privado: la app sigue andando en memoria.
@@ -257,97 +262,129 @@ export function getInvitacion(): Invitacion {
   return inv
 }
 
-/* ── Productos y stock ─────────────────────────────────────────────────── */
+/* ── Productos, Ventas y Reposiciones (Supabase) ──────────────────────────
+   Igual que Empresa/Empleados: no viven en localStorage, se leen y escriben
+   directo contra Supabase (ver `lib/supabase/operaciones.ts`) para que estén
+   disponibles en cualquier dispositivo. `hidratarOperaciones()` los trae al
+   entrar, y `suscribirseAOperaciones()` los mantiene al día en tiempo real
+   si el mismo usuario tiene la app abierta en dos dispositivos a la vez. */
 
 export const getProductos = () => getDB().productos
 export const getProducto = (pid: string) => getDB().productos.find((p) => p.id === pid)
+export const getVentas = () => getDB().ventas
+export const getReposiciones = () => getDB().reposiciones
 
-export function addProducto(p: Omit<Producto, 'id'>) {
-  const nuevo: Producto = { ...p, id: id() }
+/** Trae productos, ventas y reposiciones de Supabase y los carga en el store. */
+export async function hidratarOperaciones() {
+  const [productos, ventas, reposiciones] = await Promise.all([
+    operaciones.fetchProductos(),
+    operaciones.fetchVentas(),
+    operaciones.fetchReposiciones(),
+  ])
+  setDB((db) => ({ ...db, productos, ventas, reposiciones }))
+}
+
+/** Se suscribe a cambios remotos de productos/ventas y re-hidrata al vuelo.
+ *  Devuelve la función para cortar la suscripción (llamarla al desmontar). */
+export function suscribirseAOperaciones() {
+  return operaciones.suscribirseAOperaciones(() => {
+    hidratarOperaciones().catch(() => {
+      // Un evento de Realtime que llega justo cuando se cae la red no debería
+      // tirar un error a la consola del usuario final.
+    })
+  })
+}
+
+export async function addProducto(p: Omit<Producto, 'id'>) {
+  const nuevo = await operaciones.crearProducto(p)
   setDB((db) => ({ ...db, productos: [...db.productos, nuevo] }))
   return nuevo
 }
 
-export function updateProducto(pid: string, patch: Partial<Producto>) {
+export async function updateProducto(pid: string, patch: Partial<Producto>) {
+  const actualizado = await operaciones.actualizarProducto(pid, patch)
   setDB((db) => ({
     ...db,
-    productos: db.productos.map((p) => (p.id === pid ? { ...p, ...patch } : p)),
+    productos: db.productos.map((p) => (p.id === pid ? actualizado : p)),
   }))
+  return actualizado
 }
 
-export function removeProducto(pid: string) {
+export async function removeProducto(pid: string) {
+  await operaciones.borrarProducto(pid)
   setDB((db) => ({ ...db, productos: db.productos.filter((p) => p.id !== pid) }))
 }
 
 /** Suma (o resta, con delta negativo) unidades sin bajar de cero. */
-export function ajustarStock(pid: string, delta: number) {
-  setDB((db) => ({
-    ...db,
-    productos: db.productos.map((p) =>
-      p.id === pid ? { ...p, stock: Math.max(0, p.stock + delta) } : p,
-    ),
-  }))
+export async function ajustarStock(pid: string, delta: number) {
+  const actual = getDB().productos.find((p) => p.id === pid)
+  if (!actual) return
+  await updateProducto(pid, { stock: Math.max(0, actual.stock + delta) })
 }
 
-/* ── Ventas ────────────────────────────────────────────────────────────── */
+/**
+ * Registra la venta y descuenta el stock de cada ítem. No es una única
+ * transacción atómica (son varias llamadas a Supabase en secuencia), pero
+ * para una sola cuenta cargando sus propias ventas el riesgo de carrera es
+ * despreciable. Secuencial y no en paralelo para no perder un descuento si
+ * la misma venta repite el mismo producto en dos renglones.
+ */
+export async function addVenta(venta: Omit<Venta, 'id'>) {
+  const nueva = await operaciones.crearVenta(venta)
 
-export const getVentas = () => getDB().ventas
+  let productos = getDB().productos
+  for (const item of nueva.items) {
+    const actual = productos.find((p) => p.id === item.productoId)
+    if (!actual) continue
+    const actualizado = await operaciones.actualizarProducto(item.productoId, {
+      stock: Math.max(0, actual.stock - item.cantidad),
+    })
+    productos = productos.map((p) => (p.id === actualizado.id ? actualizado : p))
+  }
 
-/** Registra la venta y descuenta el stock de cada ítem en una sola escritura. */
-export function addVenta(venta: Omit<Venta, 'id'>) {
-  const nueva: Venta = { ...venta, id: id() }
-  setDB((db) => ({
-    ...db,
-    ventas: [nueva, ...db.ventas],
-    productos: db.productos.map((p) => {
-      const item = nueva.items.find((i) => i.productoId === p.id)
-      return item ? { ...p, stock: Math.max(0, p.stock - item.cantidad) } : p
-    }),
-  }))
+  setDB((db) => ({ ...db, ventas: [nueva, ...db.ventas], productos }))
   return nueva
 }
 
-export function removeVenta(vid: string) {
+export async function removeVenta(vid: string) {
+  await operaciones.borrarVenta(vid)
   setDB((db) => ({ ...db, ventas: db.ventas.filter((v) => v.id !== vid) }))
 }
 
-/* ── Reposiciones ──────────────────────────────────────────────────────── */
-
-export const getReposiciones = () => getDB().reposiciones
-
 /** Aplica una reposición: suma stock a lo conocido y da de alta lo nuevo. */
-export function addReposicion(rep: Omit<Reposicion, 'id'>) {
-  const nueva: Reposicion = { ...rep, id: id() }
-  setDB((db) => {
-    const productos = [...db.productos]
-    const items = nueva.items.map((item) => {
-      const idx = item.productoId
-        ? productos.findIndex((p) => p.id === item.productoId)
-        : productos.findIndex((p) => p.nombre.toLowerCase() === item.nombre.toLowerCase())
+export async function addReposicion(rep: Omit<Reposicion, 'id'>) {
+  let productos = getDB().productos
+  const items: Reposicion['items'] = []
 
-      if (idx >= 0) {
-        productos[idx] = {
-          ...productos[idx],
-          stock: productos[idx].stock + item.cantidad,
-          costo: item.costo || productos[idx].costo,
-        }
-        return { ...item, productoId: productos[idx].id }
-      }
+  for (const item of rep.items) {
+    const idx = item.productoId
+      ? productos.findIndex((p) => p.id === item.productoId)
+      : productos.findIndex((p) => p.nombre.toLowerCase() === item.nombre.toLowerCase())
+
+    if (idx >= 0) {
+      const actualizado = await operaciones.actualizarProducto(productos[idx].id, {
+        stock: productos[idx].stock + item.cantidad,
+        costo: item.costo || productos[idx].costo,
+      })
+      productos = productos.map((p) => (p.id === actualizado.id ? actualizado : p))
+      items.push({ ...item, productoId: actualizado.id })
+    } else {
       // Producto desconocido: se da de alta con un margen inicial del 60%.
-      const alta: Producto = {
-        id: id(),
+      const nuevo = await operaciones.crearProducto({
         nombre: item.nombre,
         categoria: 'Sin categoría',
         costo: item.costo,
         precio: Math.round((item.costo * 1.6) / 10) * 10,
         stock: item.cantidad,
         stockMin: 5,
-      }
-      productos.push(alta)
-      return { ...item, productoId: alta.id }
-    })
-    return { ...db, productos, reposiciones: [{ ...nueva, items }, ...db.reposiciones] }
-  })
+      })
+      productos = [...productos, nuevo]
+      items.push({ ...item, productoId: nuevo.id })
+    }
+  }
+
+  const nueva = await operaciones.crearReposicion({ ...rep, items })
+  setDB((db) => ({ ...db, productos, reposiciones: [nueva, ...db.reposiciones] }))
   return nueva
 }
 
@@ -462,13 +499,54 @@ export function limpiarPreciosIgnorados() {
 /* ── Ciclo de vida ─────────────────────────────────────────────────────── */
 
 /**
- * Siembra la base con datos de ejemplo coherentes con el plan elegido.
- * Se llama una sola vez, al terminar el setup inicial: una app financiera
- * vacía no se puede evaluar, y el usuario puede borrar todo desde Ajustes.
+ * Siembra la base con datos de ejemplo locales (categorías, movimientos de
+ * Hogar, o impuestos de Comercial) y fija el perfil. Se llama una sola vez,
+ * al terminar el setup inicial, o al cambiar de plan si el nuevo todavía no
+ * tiene datos.
+ *
+ * A propósito NO toca productos ni ventas acá: en el momento del setup
+ * inicial puede no haber sesión todavía (falta confirmar el email), y esas
+ * dos colecciones viven en Supabase — necesitan una sesión real. Ese seed va
+ * aparte, en `sembrarOperacionesDemo`, para cuando sí la haya.
  */
 export function sembrar(perfil: Perfil) {
-  const semilla = perfil.plan === 'hogar' ? seedHogar(perfil) : seedComercial(perfil)
-  setDB((db) => ({ ...db, ...semilla, perfil }))
+  if (perfil.plan === 'hogar') {
+    const semilla = seedHogar(perfil)
+    setDB((db) => ({ ...db, ...semilla, perfil }))
+    return
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { productos, ventas, ...local } = seedComercial(perfil)
+  setDB((db) => ({ ...db, ...local, perfil }))
+}
+
+/**
+ * Siembra productos y ventas de ejemplo en Supabase — sólo tiene sentido con
+ * sesión activa, por eso vive separada de `sembrar`. Se llama una vez que el
+ * dashboard confirma que hay sesión (ver `screens/Rindo.tsx`) o al cambiar a
+ * un plan comercial que todavía no tiene catálogo (ver `PantallaPlanes`).
+ * No hace nada si el plan es Hogar o si ya hay productos cargados.
+ */
+export async function sembrarOperacionesDemo(perfil: Perfil) {
+  if (perfil.plan === 'hogar' || getDB().productos.length > 0) return
+
+  const { productos: productosSeed = [], ventas: ventasSeed = [] } = seedComercial(perfil)
+
+  const productos = await operaciones.crearProductosEnLote(
+    productosSeed.map(({ id: _id, ...p }) => p),
+  )
+  // Insert en un solo INSERT ... VALUES (...) RETURNING: Postgres devuelve
+  // las filas en el mismo orden que se mandaron, así que el índice alcanza
+  // para mapear el id local del seed a la fila real de Supabase.
+  const mapaId = new Map(productosSeed.map((p, i) => [p.id, productos[i].id]))
+  const ventas = await operaciones.crearVentasEnLote(
+    ventasSeed.map(({ id: _id, ...v }) => ({
+      ...v,
+      items: v.items.map((it) => ({ ...it, productoId: mapaId.get(it.productoId) ?? it.productoId })),
+    })),
+  )
+
+  setDB((db) => ({ ...db, productos, ventas }))
 }
 
 export function cerrarSesion() {
@@ -476,7 +554,11 @@ export function cerrarSesion() {
 }
 
 /** Borrado total — usado por "Borrar todos los datos" en Ajustes. */
-export function resetDB() {
+export async function resetDB() {
+  await operaciones.borrarTodo().catch(() => {
+    // Si falla el borrado remoto (sin red, etc.) igual limpiamos localmente
+    // para no dejar la app en un estado peor que antes de tocar el botón.
+  })
   cache = dbVacia()
   escribirDisco(cache)
   if (typeof document !== 'undefined') document.documentElement.removeAttribute('data-theme')

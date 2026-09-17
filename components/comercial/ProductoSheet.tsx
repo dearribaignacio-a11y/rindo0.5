@@ -62,7 +62,7 @@ export function ProductoSheet({
    *  pasar por descuido: se avisa sin bloquear el guardado. */
   const pierdePlata = costo !== null && precio !== null && precio > 0 && precio < costo
 
-  function guardar() {
+  async function guardar() {
     const limpio = nombre.trim()
     if (!limpio) return setError('Ponele un nombre al producto')
     if (precio === null || precio <= 0) return setError('El precio de venta tiene que ser mayor a cero')
@@ -83,21 +83,29 @@ export function ProductoSheet({
       stockMin: stockMin ?? 5,
     }
 
-    if (producto) {
-      updateProducto(producto.id, datos)
-      toast('Producto actualizado')
-    } else {
-      addProducto(datos)
-      toast('Producto agregado')
+    try {
+      if (producto) {
+        await updateProducto(producto.id, datos)
+        toast('Producto actualizado')
+      } else {
+        await addProducto(datos)
+        toast('Producto agregado')
+      }
+      onClose()
+    } catch {
+      toast('No pudimos guardar el producto. Probá de nuevo.', { tono: 'aviso' })
     }
-    onClose()
   }
 
-  function eliminar() {
+  async function eliminar() {
     if (!producto) return
-    removeProducto(producto.id)
-    onClose()
-    toast('Producto eliminado', { tono: 'aviso' })
+    try {
+      await removeProducto(producto.id)
+      onClose()
+      toast('Producto eliminado', { tono: 'aviso' })
+    } catch {
+      toast('No pudimos eliminar el producto. Probá de nuevo.', { tono: 'aviso' })
+    }
   }
 
   return (

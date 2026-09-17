@@ -80,9 +80,13 @@ export function ProPrecios({ db }: { db: DB }) {
                   <Button
                     size="sm"
                     full
-                    onClick={() => {
-                      updateProducto(producto.id, { precio: sugerido })
-                      toast('Precio actualizado')
+                    onClick={async () => {
+                      try {
+                        await updateProducto(producto.id, { precio: sugerido })
+                        toast('Precio actualizado')
+                      } catch {
+                        toast('No pudimos actualizar el precio. Probá de nuevo.', 'aviso')
+                      }
                     }}
                   >
                     Aplicar

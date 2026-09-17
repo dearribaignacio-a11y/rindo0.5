@@ -62,22 +62,26 @@ export function StockFoto() {
     setItems((arr) => arr.map((it, idx) => (idx === i ? { ...it, ...patch } : it)))
   }
 
-  function guardar() {
+  async function guardar() {
     if (items.length === 0) return toast('No hay renglones para cargar', 'aviso')
-    addReposicion({
-      fecha: ahoraISO(),
-      items: items.map((i) => ({
-        productoId: null,
-        nombre: i.nombre,
-        cantidad: i.cantidad,
-        costo: i.costo,
-        autoDetectado: i.confiable,
-      })),
-      total: total ?? items.reduce((s, i) => s + i.costo * i.cantidad, 0),
-      origen: 'foto',
-    })
-    toast('Stock actualizado')
-    nav.pop()
+    try {
+      await addReposicion({
+        fecha: ahoraISO(),
+        items: items.map((i) => ({
+          productoId: null,
+          nombre: i.nombre,
+          cantidad: i.cantidad,
+          costo: i.costo,
+          autoDetectado: i.confiable,
+        })),
+        total: total ?? items.reduce((s, i) => s + i.costo * i.cantidad, 0),
+        origen: 'foto',
+      })
+      toast('Stock actualizado')
+      nav.pop()
+    } catch {
+      toast('No pudimos aplicar la reposición al stock. Probá de nuevo.', 'aviso')
+    }
   }
 
   return (

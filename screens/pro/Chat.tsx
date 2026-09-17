@@ -101,7 +101,7 @@ export function ProChat({ db }: { db: DB }) {
    * precio o desapareció entre la respuesta y la confirmación, manda el dato
    * bueno y no el que viajó por la red.
    */
-  function aplicar(burbuja: Burbuja) {
+  async function aplicar(burbuja: Burbuja) {
     const op = burbuja.operacion
     if (!op) return
 
@@ -131,7 +131,13 @@ export function ProChat({ db }: { db: DB }) {
     }
 
     const total = items.reduce((s, i) => s + i.precio * i.cantidad, 0)
-    addVenta({ fecha: ahoraISO(), items, total, metodo: 'efectivo' })
+
+    try {
+      await addVenta({ fecha: ahoraISO(), items, total, metodo: 'efectivo' })
+    } catch {
+      toast('No pudimos registrar la venta. Probá de nuevo.', 'aviso')
+      return
+    }
 
     setMensajes((m) => m.map((x) => (x.id === burbuja.id ? { ...x, aplicada: true } : x)))
 

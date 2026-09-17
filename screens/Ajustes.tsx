@@ -218,13 +218,13 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
       <ConfirmDialog
         open={borrando}
         onClose={() => setBorrando(false)}
-        onConfirm={() => {
-          resetDB()
+        onConfirm={async () => {
+          await resetDB()
           toast('Datos borrados', 'aviso')
           onCerrarSesion()
         }}
         title="¿Borrar todos los datos?"
-        description="Se eliminan movimientos, productos, ventas y la configuración de este dispositivo. Esta acción no se puede deshacer: como todavía no hay backup en la nube, no vamos a poder recuperar la información después."
+        description="Se eliminan productos, ventas y movimientos de tu cuenta (en todos los dispositivos), y la configuración de este dispositivo. Esta acción no se puede deshacer."
         confirmLabel="Borrar todo"
       />
     </>

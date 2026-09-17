@@ -21,7 +21,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useNav } from '@/components/nav'
 import { ORDEN_PLANES, PLANES } from '@/lib/plans'
 import { TEMAS } from '@/lib/temas'
-import { aplicarTema, sembrar, updatePerfil } from '@/lib/storage'
+import { aplicarTema, sembrar, sembrarOperacionesDemo, updatePerfil } from '@/lib/storage'
 import { money } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import type { DB, PlanId, ThemeId } from '@/lib/types'
@@ -360,7 +360,7 @@ export function PantallaPlanes({ db }: { db: DB }) {
       return
     }
     setCambiando(pid)
-    setTimeout(() => {
+    setTimeout(async () => {
       updatePerfil({ plan: pid })
       // Si el usuario pasa de Hogar a Comercial (o al revés) las colecciones
       // del plan nuevo están vacías: se siembran para que las pantallas tengan
@@ -368,7 +368,11 @@ export function PantallaPlanes({ db }: { db: DB }) {
       const necesitaSemilla =
         (pid === 'hogar' && db.categorias.length === 0) ||
         (pid !== 'hogar' && db.productos.length === 0)
-      if (necesitaSemilla) sembrar({ ...db.perfil!, plan: pid })
+      if (necesitaSemilla) {
+        const perfilNuevo = { ...db.perfil!, plan: pid }
+        sembrar(perfilNuevo)
+        if (pid !== 'hogar') await sembrarOperacionesDemo(perfilNuevo).catch(() => {})
+      }
       setCambiando(null)
       toast(`Ahora estás en el plan ${PLANES[pid].nombre}`)
       nav.reset('tabs')

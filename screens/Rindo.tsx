@@ -46,7 +46,15 @@ import { ProPersonal } from '@/screens/pro/Personal'
 import { ProImpuestos } from '@/screens/pro/Impuestos'
 import { ProChat } from '@/screens/pro/Chat'
 import { useDB, useMontado } from '@/lib/hooks'
-import { aplicarTema, hidratarNegocio, updateFlags } from '@/lib/storage'
+import {
+  aplicarTema,
+  getPerfil,
+  hidratarNegocio,
+  hidratarOperaciones,
+  sembrarOperacionesDemo,
+  suscribirseAOperaciones,
+  updateFlags,
+} from '@/lib/storage'
 import { esPro } from '@/lib/plans'
 import type { DB, PlanId } from '@/lib/types'
 
@@ -64,13 +72,29 @@ export function Rindo() {
   const db = useDB()
   const montado = useMontado()
 
-  // Empresa y empleados no viven en localStorage — se traen de Supabase una
-  // vez que hay sesión (que acá ya la hay, `/dashboard` la exige).
+  // Empresa, empleados, productos y ventas no viven en localStorage — se
+  // traen de Supabase una vez que hay sesión (que acá ya la hay, `/dashboard`
+  // la exige). Productos/Ventas además se mantienen al día en tiempo real:
+  // si el mismo usuario tiene la app abierta en dos dispositivos, un cambio
+  // en uno se refleja en el otro sin recargar.
   useEffect(() => {
     hidratarNegocio().catch(() => {
       // Sin red o sesión vencida a mitad de carga: la pantalla de Empresa
       // vuelve a intentarlo la próxima vez que se monte.
     })
+
+    hidratarOperaciones()
+      .then(() => {
+        // Cuenta comercial recién confirmada: el seed de productos/ventas
+        // de ejemplo no se pudo hacer en el setup (todavía no había sesión),
+        // se completa acá.
+        const perfil = getPerfil()
+        if (perfil) sembrarOperacionesDemo(perfil).catch(() => {})
+      })
+      .catch(() => {})
+
+    const cortar = suscribirseAOperaciones()
+    return cortar
   }, [])
 
   // Antes de montar no sabemos qué hay en localStorage: renderizar cualquier

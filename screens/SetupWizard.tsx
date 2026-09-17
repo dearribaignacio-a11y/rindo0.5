@@ -149,9 +149,9 @@ export function SetupWizard({
           ingresoMensual: ingreso ?? undefined,
         }
 
-    // Semilla local de datos de ejemplo — sigue viviendo en este dispositivo
-    // hasta que la migración de Productos/Movimientos/Stock a Supabase esté
-    // hecha (ver prompt de empresa/empleados).
+    // Semilla local (categorías/movimientos/impuestos). Productos y ventas
+    // de ejemplo se siembran después, ya con sesión confirmada — ver
+    // `sembrarOperacionesDemo` en `screens/Rindo.tsx`.
     sembrar(perfil)
     updateFlags({ sesionIniciada: true, setupHecho: true })
 
