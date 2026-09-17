@@ -48,7 +48,9 @@ export function ProPersonal({ db }: { db: DB }) {
                 <Avatar nombre={e.nombre} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-medium text-ink">{e.nombre}</p>
-                  <p className="truncate text-[12px] text-ink-faint">{e.puesto} · sueldo {money(e.sueldo)}</p>
+                  <p className="truncate text-[12px] text-ink-faint">
+                    {e.puesto} · sueldo {e.sueldo == null ? 'sin cargar' : money(e.sueldo)}
+                  </p>
                 </div>
                 <span className="tabular shrink-0 text-[14px] font-semibold text-ink">{money(costoEmpleado(e))}</span>
               </div>

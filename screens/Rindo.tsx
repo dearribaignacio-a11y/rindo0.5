@@ -38,6 +38,7 @@ import { ComercialProductos } from '@/screens/comercial/Productos'
 import { ComercialStock } from '@/screens/comercial/Stock'
 import { StockFoto } from '@/screens/comercial/StockFoto'
 import { Empleados } from '@/screens/comercial/Empleados'
+import { MiNegocio } from '@/screens/comercial/MiNegocio'
 import { Impuestos } from '@/screens/comercial/Impuestos'
 import { ProHub } from '@/screens/pro/Hub'
 import { ProPrecios } from '@/screens/pro/Precios'
@@ -45,7 +46,7 @@ import { ProPersonal } from '@/screens/pro/Personal'
 import { ProImpuestos } from '@/screens/pro/Impuestos'
 import { ProChat } from '@/screens/pro/Chat'
 import { useDB, useMontado } from '@/lib/hooks'
-import { aplicarTema, updateFlags } from '@/lib/storage'
+import { aplicarTema, hidratarNegocio, updateFlags } from '@/lib/storage'
 import { esPro } from '@/lib/plans'
 import type { DB, PlanId } from '@/lib/types'
 
@@ -62,6 +63,15 @@ import type { DB, PlanId } from '@/lib/types'
 export function Rindo() {
   const db = useDB()
   const montado = useMontado()
+
+  // Empresa y empleados no viven en localStorage — se traen de Supabase una
+  // vez que hay sesión (que acá ya la hay, `/dashboard` la exige).
+  useEffect(() => {
+    hidratarNegocio().catch(() => {
+      // Sin red o sesión vencida a mitad de carga: la pantalla de Empresa
+      // vuelve a intentarlo la próxima vez que se monte.
+    })
+  }, [])
 
   // Antes de montar no sabemos qué hay en localStorage: renderizar cualquier
   // pantalla acá provocaría un desajuste de hidratación.
@@ -141,6 +151,7 @@ function Interna({ db }: { db: DB }) {
         {ruta === 'planes' && <PantallaPlanes db={db} />}
         {/* Pantallas apiladas — Comercial y Comercial Pro */}
         {ruta === 'stock-foto' && <StockFoto />}
+        {ruta === 'mi-negocio' && <MiNegocio db={db} />}
         {ruta === 'empleados' && <Empleados db={db} />}
         {ruta === 'impuestos' && <Impuestos db={db} />}
         {ruta === 'pro-precios' && esPro(plan) && <ProPrecios db={db} />}

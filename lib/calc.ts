@@ -168,9 +168,12 @@ export function nivelStock(p: Producto) {
   return Math.min(1, p.stock / objetivo)
 }
 
-/** Costo mensual real de un empleado: sueldo + ~38% de cargas y aportes. */
+/** Costo mensual real de un empleado: sueldo + ~38% de cargas y aportes.
+ *  El sueldo es opcional (no todos los negocios lo quieren cargar) — sin
+ *  dato, el costo es 0 en vez de romper el cálculo. */
 export const CARGAS_SOCIALES = 0.38
-export const costoEmpleado = (e: Empleado) => Math.round(e.sueldo * (1 + CARGAS_SOCIALES))
+export const costoEmpleado = (e: Empleado) =>
+  e.sueldo == null ? 0 : Math.round(e.sueldo * (1 + CARGAS_SOCIALES))
 
 /** Ticket promedio del conjunto. */
 export const ticketPromedio = (ventas: Venta[]) =>

@@ -14,6 +14,7 @@ import {
   Palette,
   ReceiptText,
   ShieldCheck,
+  Store,
   Trash2,
   UsersRound,
 } from 'lucide-react'
@@ -150,6 +151,12 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
           )}
           {comercial && (
             <>
+              <Fila
+                icon={<Store className="size-[18px]" strokeWidth={1.9} />}
+                label="Mi Negocio"
+                valor={db.empresa?.razonSocial || 'Sin cargar'}
+                onClick={() => nav.push('mi-negocio')}
+              />
               <Fila
                 icon={<UsersRound className="size-[18px]" strokeWidth={1.9} />}
                 label="Empleados"

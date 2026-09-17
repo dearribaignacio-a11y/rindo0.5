@@ -126,11 +126,25 @@ export interface Empleado {
   id: string
   nombre: string
   puesto: string
+  telefono?: string
   /** ISO corto */
   ingreso: string
-  sueldo: number
+  /** Opcional: no todos los negocios quieren cargar el sueldo real. */
+  sueldo: number | null
   activo: boolean
-  permisos: { ventas: boolean; stock: boolean; reportes: boolean }
+}
+
+/** Datos de la empresa — vive en Supabase, no en este documento local (ver
+ *  `lib/supabase/negocio.ts`). Se agrega acá sólo para que `DB.empresa`
+ *  tenga tipo mientras el resto de la app sigue leyendo `useDB()`. */
+export interface Empresa {
+  id: string
+  razonSocial: string
+  cuitCuil?: string
+  direccion?: string
+  rubro?: string
+  logoUrl?: string
+  moneda: string
 }
 
 export interface PagoImpuesto {
@@ -185,6 +199,9 @@ export interface Flags {
 export interface DB {
   version: number
   perfil: Perfil | null
+  /** Empresa de la cuenta — null hasta que `hidratarNegocio()` la trae de
+   *  Supabase (ver `screens/Rindo.tsx`). */
+  empresa: Empresa | null
   categorias: Categoria[]
   movimientos: Movimiento[]
   miembros: Miembro[]

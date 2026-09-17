@@ -29,6 +29,7 @@ export type Ruta =
   | 'venta-manual'
   | 'stock-foto'
   | 'chat'
+  | 'mi-negocio'
   | 'empleados'
   | 'impuestos'
   | 'mov-comercio'

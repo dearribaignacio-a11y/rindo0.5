@@ -83,9 +83,11 @@ function EmpleadoSheet({
   const toast = useToast()
   const editando = Boolean(empleado)
   const [confirmando, setConfirmando] = useState(false)
+  const [guardando, setGuardando] = useState(false)
 
   const [nombre, setNombre] = useState('')
   const [puesto, setPuesto] = useState('')
+  const [telefono, setTelefono] = useState('')
   const [sueldo, setSueldo] = useState<number | null>(null)
   const [activo, setActivo] = useState(true)
   const [error, setError] = useState<string>()
@@ -96,44 +98,56 @@ function EmpleadoSheet({
     if (empleado) {
       setNombre(empleado.nombre)
       setPuesto(empleado.puesto)
+      setTelefono(empleado.telefono ?? '')
       setSueldo(empleado.sueldo)
       setActivo(empleado.activo)
     } else {
       setNombre('')
       setPuesto('')
+      setTelefono('')
       setSueldo(null)
       setActivo(true)
     }
   }, [open, empleado])
 
-  function guardar() {
+  async function guardar() {
     if (!nombre.trim()) return setError('Ponele un nombre')
-    if (!sueldo || sueldo <= 0) return setError('El sueldo tiene que ser mayor a cero')
 
     const datos = {
       nombre: nombre.trim(),
       puesto: puesto.trim() || 'Empleado',
+      telefono: telefono.trim() || undefined,
       sueldo,
       activo,
       ingreso: empleado?.ingreso ?? hoyISO(),
-      permisos: empleado?.permisos ?? { ventas: true, stock: false, reportes: false },
     }
 
-    if (empleado) {
-      updateEmpleado(empleado.id, datos)
-      toast('Empleado actualizado')
-    } else {
-      addEmpleado(datos)
-      toast('Empleado agregado')
+    setGuardando(true)
+    try {
+      if (empleado) {
+        await updateEmpleado(empleado.id, datos)
+        toast('Empleado actualizado')
+      } else {
+        await addEmpleado(datos)
+        toast('Empleado agregado')
+      }
+      onClose()
+    } catch {
+      toast('No pudimos guardar el empleado. Probá de nuevo.', { tono: 'aviso' })
+    } finally {
+      setGuardando(false)
     }
-    onClose()
   }
 
-  function eliminar() {
+  async function eliminar() {
     if (!empleado) return
-    removeEmpleado(empleado.id)
-    onClose()
-    toast('Empleado eliminado', { tono: 'aviso' })
+    try {
+      await removeEmpleado(empleado.id)
+      onClose()
+      toast('Empleado eliminado', { tono: 'aviso' })
+    } catch {
+      toast('No pudimos eliminar el empleado. Probá de nuevo.', { tono: 'aviso' })
+    }
   }
 
   return (
@@ -149,7 +163,7 @@ function EmpleadoSheet({
                 <Trash2 className="size-[18px]" strokeWidth={1.9} />
               </Button>
             )}
-            <Button full size="lg" onClick={guardar}>
+            <Button full size="lg" loading={guardando} onClick={guardar}>
               {editando ? 'Guardar cambios' : 'Agregar empleado'}
             </Button>
           </div>
@@ -158,7 +172,8 @@ function EmpleadoSheet({
         <div className="space-y-4 pb-2">
           <Input label="Nombre" placeholder="Ej. Martina Gómez" value={nombre} onChange={(e) => setNombre(e.target.value)} error={error} />
           <Input label="Puesto" placeholder="Ej. Vendedora" value={puesto} onChange={(e) => setPuesto(e.target.value)} />
-          <MoneyInput label="Sueldo mensual" value={sueldo} onChange={setSueldo} hint="Sin cargas sociales — se calculan solas en el resumen de costos" />
+          <Input label="Teléfono" placeholder="Ej. 264 555 1234" inputMode="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
+          <MoneyInput label="Sueldo mensual (opcional)" value={sueldo} onChange={setSueldo} hint="Sin cargas sociales — se calculan solas en el resumen de costos" />
           {editando && (
             <div className="flex items-center justify-between rounded-input border border-line-strong bg-surface-2 px-3.5 py-3">
               <span className="text-[14px] text-ink">Activo</span>

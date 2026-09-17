@@ -17,6 +17,7 @@ import type {
   Categoria,
   DB,
   Empleado,
+  Empresa,
   Flags,
   Impuesto,
   Invitacion,
@@ -31,6 +32,7 @@ import type {
 } from './types'
 import { seedComercial, seedHogar } from './seed'
 import { ahoraISO, hoyISO } from './format'
+import * as negocio from './supabase/negocio'
 
 const KEY = 'rindo.db'
 const THEME_KEY = 'rindo.theme'
@@ -39,6 +41,7 @@ const VERSION = 1
 export const dbVacia = (): DB => ({
   version: VERSION,
   perfil: null,
+  empresa: null,
   categorias: [],
   movimientos: [],
   miembros: [],
@@ -67,7 +70,16 @@ function leerDisco(): DB {
     const parsed = JSON.parse(raw) as Partial<DB>
     // Merge contra el default: si mañana se agrega una colección, las bases
     // viejas no explotan por venir sin esa clave.
-    return { ...dbVacia(), ...parsed, version: VERSION }
+    return {
+      ...dbVacia(),
+      ...parsed,
+      // Empresa y empleados viven en Supabase, no acá — arrancan vacíos hasta
+      // que `hidratarNegocio()` los trae, aunque una versión vieja de este
+      // mismo documento los tuviera guardados.
+      empresa: null,
+      empleados: [],
+      version: VERSION,
+    }
   } catch {
     return dbVacia()
   }
@@ -76,7 +88,9 @@ function leerDisco(): DB {
 function escribirDisco(db: DB) {
   if (typeof window === 'undefined') return
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(db))
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { empresa, empleados, ...persistible } = db
+    window.localStorage.setItem(KEY, JSON.stringify(persistible))
   } catch {
     // Cuota llena o modo privado: la app sigue andando en memoria.
   }
@@ -337,24 +351,50 @@ export function addReposicion(rep: Omit<Reposicion, 'id'>) {
   return nueva
 }
 
-/* ── Empleados ─────────────────────────────────────────────────────────── */
+/* ── Empresa y empleados (Supabase) ───────────────────────────────────────
+   A diferencia del resto de este archivo, estas colecciones no viven en
+   localStorage: se leen y escriben directo contra Supabase (ver
+   `lib/supabase/negocio.ts`) para que estén disponibles en cualquier
+   dispositivo donde el usuario inicie sesión. `cache.empresa`/`empleados`
+   son sólo un espejo en memoria para que las pantallas sigan leyendo de
+   `useDB()` como con cualquier otra colección. */
 
+export const getEmpresa = () => getDB().empresa
 export const getEmpleados = () => getDB().empleados
 
-export function addEmpleado(e: Omit<Empleado, 'id'>) {
-  const nuevo: Empleado = { ...e, id: id() }
+/** Trae empresa y empleados de Supabase y los carga en el store. Se llama
+ *  una vez al entrar al dashboard (ver `screens/Rindo.tsx`). */
+export async function hidratarNegocio() {
+  const empresa = await negocio.fetchEmpresa()
+  const empleados = empresa ? await negocio.fetchEmpleados(empresa.id) : []
+  setDB((db) => ({ ...db, empresa, empleados }))
+}
+
+export async function guardarEmpresa(datos: negocio.DatosEmpresa) {
+  const empresa = await negocio.guardarEmpresa(datos)
+  setDB((db) => ({ ...db, empresa }))
+  return empresa
+}
+
+export async function addEmpleado(e: Omit<Empleado, 'id'>) {
+  const empresa = getDB().empresa
+  if (!empresa) throw new Error('Todavía no cargaste los datos de la empresa')
+  const nuevo = await negocio.crearEmpleado(empresa.id, e)
   setDB((db) => ({ ...db, empleados: [...db.empleados, nuevo] }))
   return nuevo
 }
 
-export function updateEmpleado(eid: string, patch: Partial<Empleado>) {
+export async function updateEmpleado(eid: string, patch: Partial<Empleado>) {
+  const actualizado = await negocio.guardarEmpleado(eid, patch)
   setDB((db) => ({
     ...db,
-    empleados: db.empleados.map((e) => (e.id === eid ? { ...e, ...patch } : e)),
+    empleados: db.empleados.map((e) => (e.id === eid ? actualizado : e)),
   }))
+  return actualizado
 }
 
-export function removeEmpleado(eid: string) {
+export async function removeEmpleado(eid: string) {
+  await negocio.borrarEmpleado(eid)
   setDB((db) => ({ ...db, empleados: db.empleados.filter((e) => e.id !== eid) }))
 }
 

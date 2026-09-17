@@ -1,7 +1,6 @@
 import type {
   Categoria,
   DB,
-  Empleado,
   Impuesto,
   Miembro,
   Movimiento,
@@ -256,23 +255,6 @@ const CATALOGOS: Record<string, ProductoSemilla[]> = {
   ],
 }
 
-const PUESTOS = ['Vendedor/a', 'Cajero/a', 'Encargado/a', 'Repositor/a', 'Ayudante']
-
-/** Del rango que eligió en el setup a una cantidad concreta de altas. */
-function cuantosEmpleados(rango?: string) {
-  switch (rango) {
-    case '0':
-      return 0
-    case '1-3':
-      return 2
-    case '4-10':
-      return 5
-    case 'Más de 10':
-      return 8
-    default:
-      return 2
-  }
-}
 
 export function seedComercial(perfil: Perfil): Partial<DB> {
   const catalogo = CATALOGOS[perfil.rubro ?? 'Almacén'] ?? CATALOGOS['Almacén']
@@ -326,24 +308,10 @@ export function seedComercial(perfil: Perfil): Partial<DB> {
   }
   ventas.sort((a, b) => b.fecha.localeCompare(a.fecha))
 
-  /* Empleados */
-  const cantidad = cuantosEmpleados(perfil.empleadosRango)
-  const nombresEmpleados = ['Lucía', 'Martín', 'Sofía', 'Diego', 'Valentina', 'Nicolás', 'Camila', 'Gonzalo']
-  const empleados: Empleado[] = Array.from({ length: cantidad }, (_, i) => ({
-    id: uid(),
-    nombre: nombresEmpleados[i],
-    puesto: PUESTOS[i % PUESTOS.length],
-    ingreso: hace(120 + i * 95),
-    sueldo: redondear(520000 + i * 45000),
-    activo: true,
-    permisos: {
-      ventas: true,
-      stock: i % 2 === 0,
-      reportes: i === 0,
-    },
-  }))
-
   /* Obligaciones impositivas típicas de un comercio chico en San Juan */
+  const cantidadEmpleadosAprox = ({ '0': 0, '1-3': 2, '4-10': 5, 'Más de 10': 8 } as const)[
+    perfil.empleadosRango as '0' | '1-3' | '4-10' | 'Más de 10'
+  ] ?? 2
   const impuestos: Impuesto[] = ([
     {
       id: uid(),
@@ -378,15 +346,17 @@ export function seedComercial(perfil: Perfil): Partial<DB> {
     {
       id: uid(),
       nombre: 'Cargas sociales',
-      monto: cantidad > 0 ? redondear(cantidad * 148000) : 0,
+      // Estimación gruesa a partir del rango que declaró en el setup — los
+      // empleados reales viven en Supabase, no hace falta la lista acá.
+      monto: cantidadEmpleadosAprox > 0 ? redondear(cantidadEmpleadosAprox * 148000) : 0,
       vence: proximoDia(12),
-      estado: cantidad > 0 ? 'pendiente' : 'pagado',
+      estado: cantidadEmpleadosAprox > 0 ? 'pendiente' : 'pagado',
       periodicidad: 'mensual',
       pagos: [],
     },
   ] satisfies Impuesto[]).filter((i) => i.monto > 0)
 
-  return { productos, ventas, empleados, impuestos, categorias: [], movimientos: [] }
+  return { productos, ventas, impuestos, categorias: [], movimientos: [] }
 }
 
 export const RUBROS = [
