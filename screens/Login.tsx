@@ -639,7 +639,7 @@ function RecuperarSheet({
     // La respuesta de Supabase no revela si el email existe o no — el mensaje
     // de "enviado" es siempre el mismo, así no se filtra qué cuentas existen.
     await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=recovery`,
+      redirectTo: `${window.location.origin}/auth/callback`,
     })
     setEnviando(false)
     setEnviado(true)

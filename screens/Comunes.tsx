@@ -22,6 +22,9 @@ import { useNav } from '@/components/nav'
 import { ORDEN_PLANES, PLANES } from '@/lib/plans'
 import { TEMAS } from '@/lib/temas'
 import { aplicarTema, sembrar, sembrarOperacionesDemo, updatePerfil } from '@/lib/storage'
+import { createClient } from '@/lib/supabase/client'
+import { mapAuthError } from '@/lib/supabase/errores'
+import { errorPassword } from '@/lib/validacion'
 import { money } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import type { DB, PlanId, ThemeId } from '@/lib/types'
@@ -163,13 +166,48 @@ export function PantallaPassword() {
   const [nueva, setNueva] = useState('')
   const [repetir, setRepetir] = useState('')
   const [error, setError] = useState<string>()
+  const [guardando, setGuardando] = useState(false)
 
-  function guardar() {
-    if (actual.length < 6) return setError('Ingresá tu contraseña actual')
-    if (nueva.length < 8) return setError('La nueva contraseña necesita 8 caracteres o más')
+  async function guardar() {
+    if (actual.length === 0) return setError('Ingresá tu contraseña actual')
+    const errNueva = errorPassword(nueva)
+    if (errNueva) return setError(errNueva)
     if (nueva !== repetir) return setError('Las contraseñas nuevas no coinciden')
-    // Sin backend de autenticación no hay nada que persistir todavía: acá va
-    // el PUT a /api/auth/password cuando exista.
+
+    setError(undefined)
+    setGuardando(true)
+    const supabase = createClient()
+
+    // No hay una API directa de "verificar contraseña actual": se confirma
+    // volviendo a iniciar sesión con ella antes de aplicar el cambio.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user?.email) {
+      setGuardando(false)
+      setError('No pudimos identificar tu cuenta. Volvé a iniciar sesión.')
+      return
+    }
+
+    const { error: loginError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: actual,
+    })
+    if (loginError) {
+      setGuardando(false)
+      setError('La contraseña actual no es correcta')
+      return
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({ password: nueva })
+    setGuardando(false)
+
+    if (updateError) {
+      setError(mapAuthError(updateError))
+      return
+    }
+
     toast('Contraseña actualizada')
     nav.pop()
   }
@@ -184,25 +222,34 @@ export function PantallaPassword() {
           reveal
           leading={<Lock className="size-[18px]" strokeWidth={1.9} />}
           value={actual}
-          onChange={(e) => setActual(e.target.value)}
+          onChange={(e) => {
+            setActual(e.target.value)
+            if (error) setError(undefined)
+          }}
         />
         <Input
           label="Nueva contraseña"
           reveal
-          hint="Mínimo 8 caracteres."
+          hint="Mínimo 8 caracteres, con letras y números."
           value={nueva}
-          onChange={(e) => setNueva(e.target.value)}
+          onChange={(e) => {
+            setNueva(e.target.value)
+            if (error) setError(undefined)
+          }}
         />
         <Input
           label="Repetir nueva contraseña"
           reveal
           value={repetir}
-          onChange={(e) => setRepetir(e.target.value)}
+          onChange={(e) => {
+            setRepetir(e.target.value)
+            if (error) setError(undefined)
+          }}
           error={error}
         />
       </div>
 
-      <Button full size="lg" className="mt-6" onClick={guardar}>
+      <Button full size="lg" className="mt-6" loading={guardando} onClick={guardar}>
         Guardar contraseña
       </Button>
     </Screen>

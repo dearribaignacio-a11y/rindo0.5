@@ -20,6 +20,12 @@ import { createClient } from '@/lib/supabase/client'
  * el flujo es PKCE. Un segundo canje manual falla siempre, porque el código
  * sirve una sola vez. Sólo hace falta escuchar cuándo la sesión quedó lista.
  *
+ * Para saber si es un link de recuperación (y mandar a poner contraseña
+ * nueva) usamos el evento `PASSWORD_RECOVERY` que dispara `onAuthStateChange`
+ * — es la señal propia de Supabase para esto. Antes usábamos un parámetro
+ * `?next=recovery` agregado a mano en el link, pero no sobrevivía el
+ * redirect intermedio por el servidor de Supabase.
+ *
  * Como es PKCE, el link sólo funciona si se abre en el mismo navegador donde
  * se inició el trámite — ahí es donde vive el "code verifier" guardado.
  */
@@ -27,14 +33,13 @@ export default function AuthCallbackPage() {
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    const esRecovery = new URLSearchParams(window.location.search).get('next') === 'recovery'
     const supabase = createClient()
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (!session) return
       // Navegación dura (no router.push): así el servidor recibe la cookie
       // de sesión recién escrita en esta misma carga, no una request en caché.
-      window.location.href = esRecovery ? '/auth/actualizar-password' : '/dashboard'
+      window.location.href = event === 'PASSWORD_RECOVERY' ? '/auth/actualizar-password' : '/dashboard'
     })
 
     const timeout = setTimeout(() => setError(true), 6000)
