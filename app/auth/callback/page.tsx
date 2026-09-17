@@ -11,34 +11,37 @@ import { createClient } from '@/lib/supabase/client'
  * El plan gratuito no deja editar el HTML de los templates de correo (el
  * editor de "Source" queda bloqueado), así que no podemos armar un link con
  * `token_hash` como recomienda Supabase para el flujo por servidor. En vez de
- * eso usamos el link por defecto (`{{ .ConfirmationURL }}`): ese link pega
- * primero contra el propio servidor de Supabase, que valida el token y
- * redirige acá con la sesión en el fragmento de la URL
- * (`#access_token=...&type=signup`). El cliente de `@supabase/ssr` detecta
- * ese fragmento solo al crearse y guarda la sesión en cookies — sólo hay que
- * esperar a que dispare el evento y mandar a cada quien a donde corresponda.
+ * eso usamos el link por defecto (`{{ .ConfirmationURL }}`) con el flujo PKCE
+ * que fuerza `@supabase/ssr`: ese link pega primero contra el servidor de
+ * Supabase, que valida el token y redirige acá con un `?code=...` en la URL.
+ * Hay que canjear ese code por una sesión con `exchangeCodeForSession` —
+ * necesita el "code verifier" que el propio navegador guardó en una cookie
+ * al llamar `signUp()`/`resetPasswordForEmail()`, así que el link sólo
+ * funciona si se abre en el mismo navegador donde se inició el trámite.
  */
 export default function AuthCallbackPage() {
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    const supabase = createClient()
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    const esRecovery = params.get('next') === 'recovery'
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) return
-      const params = new URLSearchParams(window.location.hash.slice(1))
-      const tipo = params.get('type')
+    if (!code) {
+      setError(true)
+      return
+    }
+
+    const supabase = createClient()
+    supabase.auth.exchangeCodeForSession(code).then(({ data, error: exchangeError }) => {
+      if (exchangeError || !data.session) {
+        setError(true)
+        return
+      }
       // Navegación dura (no router.push): así el servidor recibe la cookie
       // de sesión recién escrita en esta misma carga, no una request en caché.
-      window.location.href = tipo === 'recovery' ? '/auth/actualizar-password' : '/dashboard'
+      window.location.href = esRecovery ? '/auth/actualizar-password' : '/dashboard'
     })
-
-    const timeout = setTimeout(() => setError(true), 6000)
-
-    return () => {
-      sub.subscription.unsubscribe()
-      clearTimeout(timeout)
-    }
   }, [])
 
   if (error) {
@@ -46,7 +49,8 @@ export default function AuthCallbackPage() {
       <div className="flex min-h-dvh w-full flex-col items-center justify-center gap-3 px-5 text-center">
         <Logo size="lg" />
         <p className="max-w-[36ch] text-[15px] leading-relaxed text-ink-muted">
-          El link no es válido o ya venció. Volvé al login e intentá de nuevo.
+          El link no es válido, ya venció, o se abrió en un navegador distinto al que usaste para
+          registrarte. Volvé al login e intentá de nuevo desde el mismo navegador.
         </p>
       </div>
     )
