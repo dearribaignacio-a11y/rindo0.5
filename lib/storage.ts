@@ -140,6 +140,33 @@ export function updatePerfil(patch: Partial<Perfil>) {
   setDB((db) => (db.perfil ? { ...db, perfil: { ...db.perfil, ...patch } } : db))
 }
 
+/**
+ * Trae el plan (y nombre/negocio como respaldo) desde la tabla `profiles` de
+ * Supabase. Si ya hay un perfil local, sólo confía el `plan` del servidor —
+ * el resto de los campos locales (ciudad, logo, etc.) no se pisan, porque
+ * todavía no tienen dónde vivir en el servidor. Si no hay perfil local en
+ * absoluto (otro navegador o dispositivo), arma uno mínimo con lo que sí
+ * está en Supabase, para que "Cambiar plan" y "Mi Negocio" dejen de quedar
+ * mudos por falta de perfil.
+ */
+export async function hidratarPerfil() {
+  const remoto = await negocio.fetchPerfilRemoto()
+  if (!remoto) return
+  setDB((db) => ({
+    ...db,
+    perfil: db.perfil
+      ? { ...db.perfil, plan: remoto.plan }
+      : { nombre: remoto.nombre, email: remoto.email, plan: remoto.plan, moneda: 'ARS', negocio: remoto.negocio },
+  }))
+}
+
+/** Cambia de plan local y en Supabase, para que el plan de la cuenta no
+ *  dependa de en qué navegador se lo cambiaste. */
+export async function cambiarPlan(plan: Perfil['plan']) {
+  updatePerfil({ plan })
+  await negocio.actualizarPlanRemoto(plan)
+}
+
 export const getAjustes = () => getDB().ajustes
 
 export function updateAjustes(patch: Partial<Ajustes>) {

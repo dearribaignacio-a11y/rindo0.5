@@ -51,6 +51,7 @@ import {
   getPerfil,
   hidratarNegocio,
   hidratarOperaciones,
+  hidratarPerfil,
   sembrarOperacionesDemo,
   suscribirseAOperaciones,
   updateFlags,
@@ -78,20 +79,27 @@ export function Rindo() {
   // si el mismo usuario tiene la app abierta en dos dispositivos, un cambio
   // en uno se refleja en el otro sin recargar.
   useEffect(() => {
-    hidratarNegocio().catch(() => {
-      // Sin red o sesión vencida a mitad de carga: la pantalla de Empresa
-      // vuelve a intentarlo la próxima vez que se monte.
-    })
-
-    hidratarOperaciones()
-      .then(() => {
-        // Cuenta comercial recién confirmada: el seed de productos/ventas
-        // de ejemplo no se pudo hacer en el setup (todavía no había sesión),
-        // se completa acá.
-        const perfil = getPerfil()
-        if (perfil) sembrarOperacionesDemo(perfil).catch(() => {})
-      })
+    // El plan se hidrata primero y se espera: si no hay perfil local (otro
+    // navegador o dispositivo), es lo único que permite saber qué plan tiene
+    // la cuenta antes de decidir si hace falta sembrar productos de ejemplo.
+    hidratarPerfil()
       .catch(() => {})
+      .then(() => {
+        hidratarNegocio().catch(() => {
+          // Sin red o sesión vencida a mitad de carga: la pantalla de Empresa
+          // vuelve a intentarlo la próxima vez que se monte.
+        })
+
+        hidratarOperaciones()
+          .then(() => {
+            // Cuenta comercial recién confirmada: el seed de productos/ventas
+            // de ejemplo no se pudo hacer en el setup (todavía no había
+            // sesión), se completa acá.
+            const perfil = getPerfil()
+            if (perfil) sembrarOperacionesDemo(perfil).catch(() => {})
+          })
+          .catch(() => {})
+      })
 
     const cortar = suscribirseAOperaciones()
     return cortar

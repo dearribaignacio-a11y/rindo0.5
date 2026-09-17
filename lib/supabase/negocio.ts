@@ -1,6 +1,7 @@
 import { createClient } from './client'
+import { planADB, planDesdeDB } from './types'
 import type { EmpresaRow, EmpleadoRow } from './types'
-import type { Empresa, Empleado } from '@/lib/types'
+import type { Empresa, Empleado, PlanId } from '@/lib/types'
 
 /* ── Mapeo fila de Supabase ↔ tipo que usa la UI ──────────────────────────
    La UI sigue hablando en español/camelCase (Empresa, Empleado) tal como
@@ -37,6 +38,46 @@ async function usuarioActual() {
   } = await supabase.auth.getUser()
   if (!user) throw new Error('No hay sesión activa')
   return { supabase, user }
+}
+
+/* ── Perfil (tabla `profiles`) ─────────────────────────────────────────────
+   `Perfil` en el resto de la app vive sólo en localStorage — por eso "Cambiar
+   plan"/"Mi Negocio" quedaban mudos al entrar desde otro navegador o
+   dispositivo donde ese perfil nunca se creó. El plan en concreto SÍ tiene
+   un lugar en Supabase desde el prompt de login (tabla `profiles`, creada
+   por el trigger `handle_new_user`), simplemente nunca se leía de vuelta.
+   Esto no migra el perfil entero (nombre de fantasía, ciudad, logo, etc.
+   siguen sin vivir en el servidor) pero al menos el plan —lo que decide qué
+   pantallas ve cada cuenta— ya no depende de qué navegador se esté usando. */
+
+export interface PerfilRemoto {
+  nombre: string
+  negocio?: string
+  plan: PlanId
+  email: string
+}
+
+export async function fetchPerfilRemoto(): Promise<PerfilRemoto | null> {
+  const { supabase, user } = await usuarioActual()
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return {
+    nombre: data.nombre_apellido,
+    negocio: data.nombre_negocio ?? undefined,
+    plan: planDesdeDB(data.plan),
+    email: user.email ?? '',
+  }
+}
+
+export async function actualizarPlanRemoto(plan: PlanId): Promise<void> {
+  const { supabase, user } = await usuarioActual()
+  const { error } = await supabase.from('profiles').update({ plan: planADB(plan) }).eq('id', user.id)
+  if (error) throw error
 }
 
 /* ── Empresa ───────────────────────────────────────────────────────────── */
