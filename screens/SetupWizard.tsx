@@ -149,9 +149,6 @@ export function SetupWizard({
           ingresoMensual: ingreso ?? undefined,
         }
 
-    // Semilla local (categorías/movimientos/impuestos). Productos y ventas
-    // de ejemplo se siembran después, ya con sesión confirmada — ver
-    // `sembrarOperacionesDemo` en `screens/Rindo.tsx`.
     sembrar(perfil)
     updateFlags({ sesionIniciada: true, setupHecho: true })
 

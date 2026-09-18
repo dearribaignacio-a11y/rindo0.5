@@ -30,7 +30,6 @@ import type {
   ThemeId,
   Venta,
 } from './types'
-import { seedComercial, seedHogar } from './seed'
 import { ahoraISO, hoyISO } from './format'
 import * as negocio from './supabase/negocio'
 import * as operaciones from './supabase/operaciones'
@@ -525,55 +524,12 @@ export function limpiarPreciosIgnorados() {
 
 /* ── Ciclo de vida ─────────────────────────────────────────────────────── */
 
-/**
- * Siembra la base con datos de ejemplo locales (categorías, movimientos de
- * Hogar, o impuestos de Comercial) y fija el perfil. Se llama una sola vez,
- * al terminar el setup inicial, o al cambiar de plan si el nuevo todavía no
- * tiene datos.
- *
- * A propósito NO toca productos ni ventas acá: en el momento del setup
- * inicial puede no haber sesión todavía (falta confirmar el email), y esas
- * dos colecciones viven en Supabase — necesitan una sesión real. Ese seed va
- * aparte, en `sembrarOperacionesDemo`, para cuando sí la haya.
- */
+/** Fija el perfil de la cuenta. Se llama al terminar el setup inicial. No
+ *  carga datos de ejemplo: una cuenta nueva arranca vacía, como cualquier
+ *  cuenta real — antes sembraba productos/ventas/movimientos de mentira,
+ *  pero confundía a un comerciante real ver actividad que nunca cargó. */
 export function sembrar(perfil: Perfil) {
-  if (perfil.plan === 'hogar') {
-    const semilla = seedHogar(perfil)
-    setDB((db) => ({ ...db, ...semilla, perfil }))
-    return
-  }
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { productos, ventas, ...local } = seedComercial(perfil)
-  setDB((db) => ({ ...db, ...local, perfil }))
-}
-
-/**
- * Siembra productos y ventas de ejemplo en Supabase — sólo tiene sentido con
- * sesión activa, por eso vive separada de `sembrar`. Se llama una vez que el
- * dashboard confirma que hay sesión (ver `screens/Rindo.tsx`) o al cambiar a
- * un plan comercial que todavía no tiene catálogo (ver `PantallaPlanes`).
- * No hace nada si el plan es Hogar o si ya hay productos cargados.
- */
-export async function sembrarOperacionesDemo(perfil: Perfil) {
-  if (perfil.plan === 'hogar' || getDB().productos.length > 0) return
-
-  const { productos: productosSeed = [], ventas: ventasSeed = [] } = seedComercial(perfil)
-
-  const productos = await operaciones.crearProductosEnLote(
-    productosSeed.map(({ id: _id, ...p }) => p),
-  )
-  // Insert en un solo INSERT ... VALUES (...) RETURNING: Postgres devuelve
-  // las filas en el mismo orden que se mandaron, así que el índice alcanza
-  // para mapear el id local del seed a la fila real de Supabase.
-  const mapaId = new Map(productosSeed.map((p, i) => [p.id, productos[i].id]))
-  const ventas = await operaciones.crearVentasEnLote(
-    ventasSeed.map(({ id: _id, ...v }) => ({
-      ...v,
-      items: v.items.map((it) => ({ ...it, productoId: mapaId.get(it.productoId) ?? it.productoId })),
-    })),
-  )
-
-  setDB((db) => ({ ...db, productos, ventas }))
+  setDB((db) => ({ ...db, perfil }))
 }
 
 export function cerrarSesion() {
