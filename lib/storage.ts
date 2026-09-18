@@ -536,13 +536,23 @@ export function cerrarSesion() {
   updateFlags({ sesionIniciada: false })
 }
 
-/** Borrado total — usado por "Borrar todos los datos" en Ajustes. */
+/**
+ * Borrado de datos financieros — usado por "Borrar todos los datos" en
+ * Ajustes. Borra productos/ventas/reposiciones (en Supabase y en pantalla) y
+ * las colecciones locales (movimientos, categorías, impuestos, etc.), y
+ * resetea el tema. A propósito NO toca `perfil`, `empresa` ni `empleados` ni
+ * las `flags` de sesión/onboarding: esos no son "datos financieros" y
+ * borrarlos dejaba la cuenta sin saber su propio plan hasta cerrar sesión y
+ * volver a entrar (perfil vive local; sin él, "Cambiar plan"/"Mi Negocio"
+ * no tienen de dónde partir hasta el próximo `hidratarPerfil()`).
+ */
 export async function resetDB() {
   await operaciones.borrarTodo().catch(() => {
     // Si falla el borrado remoto (sin red, etc.) igual limpiamos localmente
     // para no dejar la app en un estado peor que antes de tocar el botón.
   })
-  cache = dbVacia()
+  const { perfil, empresa, empleados, flags } = getDB()
+  cache = { ...dbVacia(), perfil, empresa, empleados, flags }
   escribirDisco(cache)
   if (typeof document !== 'undefined') document.documentElement.removeAttribute('data-theme')
   try {
