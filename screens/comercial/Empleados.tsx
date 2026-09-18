@@ -23,13 +23,25 @@ export function Empleados({ db }: { db: DB }) {
   const nav = useNav()
   const [creando, setCreando] = useState(false)
   const [editando, setEditando] = useState<Empleado | null>(null)
+  const sinEmpresa = !db.empresa
 
   return (
     <>
       <Screen pad="fab">
         <TopBar title="Empleados" onBack={nav.pop} />
 
-        {db.empleados.length === 0 ? (
+        {sinEmpresa ? (
+          <Empty
+            icon={UsersRound}
+            title="Primero cargá los datos de tu negocio"
+            hint="Antes de sumar empleados, completá Mi Negocio en Ajustes."
+            action={
+              <Button size="sm" onClick={() => nav.push('mi-negocio')}>
+                Ir a Mi Negocio
+              </Button>
+            }
+          />
+        ) : db.empleados.length === 0 ? (
           <Empty
             icon={UsersRound}
             title="Sin empleados cargados"
@@ -63,7 +75,7 @@ export function Empleados({ db }: { db: DB }) {
         )}
       </Screen>
 
-      <Fab label="Agregar empleado" icon={UserPlus} onClick={() => setCreando(true)} />
+      {!sinEmpresa && <Fab label="Agregar empleado" icon={UserPlus} onClick={() => setCreando(true)} />}
 
       <EmpleadoSheet open={creando} onClose={() => setCreando(false)} />
       <EmpleadoSheet open={Boolean(editando)} onClose={() => setEditando(null)} empleado={editando} />
