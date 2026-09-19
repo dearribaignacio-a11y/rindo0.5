@@ -1,4 +1,4 @@
-import { MercadoPagoConfig, Customer, CardToken, Payment } from 'mercadopago'
+import { MercadoPagoConfig, Customer, CardToken, Payment, PaymentRefund } from 'mercadopago'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { planADB } from '@/lib/supabase/types'
 import { PLANES } from '@/lib/plans'
@@ -110,11 +110,19 @@ export async function guardarTarjetaYCobrar(opts: {
     cardId = tarjetas[0]?.id
   }
   if (!cardId) {
-    // Detalle completo temporal: hasta confirmar por qué Mercado Pago no
-    // vincula la tarjeta al cliente, conviene ver la respuesta real en vez
-    // de un mensaje genérico.
+    // Mercado Pago no vincula al cliente tarjetas que no admiten cobro
+    // recurrente (típicamente prepagas): el pago se aprueba pero no queda
+    // nada guardado para cobrar el mes que viene. Como ya se cobró y no se
+    // va a poder usar esa tarjeta, se devuelve la plata en vez de quedarnos
+    // con un cobro que no sirve para nada.
+    if (pago.id) {
+      await new PaymentRefund(mp).total({ payment_id: pago.id }).catch(() => {
+        // Si ni el reintegro se puede hacer solo, igual seguimos: el aviso
+        // de abajo ya le dice al usuario que no siga con esa tarjeta.
+      })
+    }
     throw new Error(
-      `Mercado Pago no devolvió la tarjeta guardada — pago.card: ${JSON.stringify(pago.card ?? null)}, tarjetas del cliente: ${JSON.stringify(tarjetas)}`,
+      'Esa tarjeta no admite cobros automáticos (suele pasar con tarjetas prepagas). Se te devolvió el pago — probá con una tarjeta de crédito o débito.',
     )
   }
 
