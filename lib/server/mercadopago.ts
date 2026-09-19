@@ -103,13 +103,19 @@ export async function guardarTarjetaYCobrar(opts: {
   // respaldo, se busca en las tarjetas guardadas del cliente (a esta altura
   // ya tiene la que se acaba de usar, por el pago recién aprobado).
   let cardId = pago.card?.id
+  let tarjetas: Awaited<ReturnType<Customer['listCards']>> = []
   if (!cardId) {
     const customer = new Customer(mp)
-    const tarjetas = await customer.listCards({ customerId })
+    tarjetas = await customer.listCards({ customerId })
     cardId = tarjetas[0]?.id
   }
   if (!cardId) {
-    throw new Error('Mercado Pago no devolvió la tarjeta guardada')
+    // Detalle completo temporal: hasta confirmar por qué Mercado Pago no
+    // vincula la tarjeta al cliente, conviene ver la respuesta real en vez
+    // de un mensaje genérico.
+    throw new Error(
+      `Mercado Pago no devolvió la tarjeta guardada — pago.card: ${JSON.stringify(pago.card ?? null)}, tarjetas del cliente: ${JSON.stringify(tarjetas)}`,
+    )
   }
 
   const proximoCobro = new Date()
