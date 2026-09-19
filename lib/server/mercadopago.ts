@@ -62,7 +62,13 @@ async function cobrarConTarjetaGuardada(
 /** Alta de la tarjeta + primer cobro. El `token` viene del formulario de
  *  tarjeta (Brick de `@mercadopago/sdk-react`) corriendo en el navegador —
  *  ni el número ni el CVV pasan nunca por este servidor, sólo esta ficha de
- *  un solo uso. Si el primer cobro no se aprueba, no se activa el plan. */
+ *  un solo uso. Si el primer cobro no se aprueba, no se activa el plan.
+ *
+ *  Importante: NO se llama a "guardar tarjeta" (`customer.createCard`) por
+ *  separado — ese endpoint rechaza el token del Brick con "security_code_id
+ *  can't be null". El mecanismo correcto es cobrar directo con `payer.type:
+ *  'customer'`: Mercado Pago guarda la tarjeta como efecto del pago mismo, y
+ *  la devuelve en `pago.card.id`, lista para usarse en renovaciones futuras. */
 export async function guardarTarjetaYCobrar(opts: {
   userId: string
   email: string
@@ -74,25 +80,26 @@ export async function guardarTarjetaYCobrar(opts: {
   if (!mp) throw new Error('Falta MERCADOPAGO_ACCESS_TOKEN en el servidor')
 
   const customerId = await buscarOCrearCliente(mp, opts.email)
-
-  const customer = new Customer(mp)
-  const tarjeta = await customer.createCard({ customerId, body: { token: opts.token } })
-  if (!tarjeta.id) throw new Error('Mercado Pago no devolvió un card_id')
-
   const plan = PLANES[opts.plan]
   const monto = opts.ciclo === 'anual' ? plan.anual : plan.mensual
 
-  const pago = await cobrarConTarjetaGuardada(mp, {
-    customerId,
-    cardId: tarjeta.id,
-    email: opts.email,
-    monto,
-    descripcion: `Rindo — Plan ${plan.nombre} (${opts.ciclo === 'anual' ? 'anual' : 'mensual'})`,
-    externalReference: opts.userId,
+  const payment = new Payment(mp)
+  const pago = await payment.create({
+    body: {
+      transaction_amount: monto,
+      token: opts.token,
+      description: `Rindo — Plan ${plan.nombre} (${opts.ciclo === 'anual' ? 'anual' : 'mensual'})`,
+      installments: 1,
+      external_reference: opts.userId,
+      payer: { type: 'customer', id: customerId, email: opts.email },
+    },
   })
 
-  if (!pago.aprobado) {
-    throw new Error(`El pago no se aprobó: ${pago.detalle}`)
+  if (pago.status !== 'approved') {
+    throw new Error(`El pago no se aprobó: ${pago.status_detail ?? pago.status}`)
+  }
+  if (!pago.card?.id) {
+    throw new Error('Mercado Pago no devolvió la tarjeta guardada')
   }
 
   const proximoCobro = new Date()
@@ -104,10 +111,10 @@ export async function guardarTarjetaYCobrar(opts: {
     .update({
       plan: planADB(opts.plan),
       mp_customer_id: customerId,
-      mp_card_id: tarjeta.id,
+      mp_card_id: pago.card.id,
       suscripcion_activa: true,
       proximo_cobro: proximoCobro.toISOString().slice(0, 10),
-      mp_ultimo_pago_id: pago.id,
+      mp_ultimo_pago_id: String(pago.id ?? ''),
     })
     .eq('id', opts.userId)
   if (error) throw error
