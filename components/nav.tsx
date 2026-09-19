@@ -33,6 +33,7 @@ export type Ruta =
   | 'empleados'
   | 'impuestos'
   | 'mov-comercio'
+  | 'pagar-tarjeta'
   /* Comercial Pro */
   | 'pro'
   | 'pro-impuestos'

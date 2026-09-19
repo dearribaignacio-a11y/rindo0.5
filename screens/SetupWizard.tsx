@@ -127,11 +127,16 @@ export function SetupWizard({
       return
     }
 
+    // `suscripcionActiva: true` acá no es "gratis para siempre": es el mismo
+    // default con el que arranca la fila en `profiles`. Elegir un plan pago
+    // en el setup no carga ninguna tarjeta todavía — eso pasa recién si más
+    // adelante cambia de plan desde Ajustes, que ahí sí pide la tarjeta.
     const perfil: Perfil = comercial
       ? {
           nombre: nombreApellido,
           email,
           plan,
+          suscripcionActiva: true,
           moneda,
           negocio: negocio.trim(),
           rubro,
@@ -144,6 +149,7 @@ export function SetupWizard({
           nombre: nombreApellido,
           email,
           plan,
+          suscripcionActiva: true,
           moneda,
           integrantes,
           ingresoMensual: ingreso ?? undefined,

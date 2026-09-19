@@ -54,6 +54,7 @@ export interface PerfilRemoto {
   nombre: string
   negocio?: string
   plan: PlanId
+  suscripcionActiva: boolean
   email: string
 }
 
@@ -70,6 +71,7 @@ export async function fetchPerfilRemoto(): Promise<PerfilRemoto | null> {
     nombre: data.nombre_apellido,
     negocio: data.nombre_negocio ?? undefined,
     plan: planDesdeDB(data.plan),
+    suscripcionActiva: data.suscripcion_activa,
     email: user.email ?? '',
   }
 }

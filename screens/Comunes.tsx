@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/Bits'
 import { Select } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
 import { useNav } from '@/components/nav'
-import { ORDEN_PLANES, PLANES } from '@/lib/plans'
+import { ORDEN_PLANES, PLANES, esComercial } from '@/lib/plans'
 import { TEMAS } from '@/lib/temas'
 import { aplicarTema, cambiarPlan, updatePerfil } from '@/lib/storage'
 import { createClient } from '@/lib/supabase/client'
@@ -406,6 +406,14 @@ export function PantallaPlanes({ db }: { db: DB }) {
       })
       return
     }
+
+    // Un plan pago necesita cargar la tarjeta primero (y cobrar el primer
+    // mes) — eso pasa en su propia pantalla, no acá.
+    if (esComercial(pid)) {
+      nav.push('pagar-tarjeta', { plan: pid, ciclo })
+      return
+    }
+
     setCambiando(pid)
     setTimeout(async () => {
       try {
@@ -497,7 +505,8 @@ export function PantallaPlanes({ db }: { db: DB }) {
       </div>
 
       <p className="mt-5 text-center text-[12px] leading-relaxed text-ink-faint">
-        Es una demo: no se cobra nada y el cambio de plan es inmediato.
+        Los planes pagos piden cargar una tarjeta una sola vez — el cobro después se hace solo cada
+        mes. El plan Hogar es gratis y el cambio es inmediato.
       </p>
     </Screen>
   )

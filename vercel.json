@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/mercadopago/cobrar-renovaciones",
+      "schedule": "0 12 * * *"
+    }
+  ]
+}
