@@ -38,6 +38,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ initPoint })
   } catch (err) {
     console.error('crear-suscripcion', err)
-    return NextResponse.json({ error: 'No pudimos iniciar el pago' }, { status: 500 })
+    // El detalle (ej. "Payer is associated with a different site") viaja al
+    // cliente para no depender de ir a mirar los logs de Vercel en cada
+    // prueba — no es información sensible, es un mensaje de validación de
+    // la propia API de Mercado Pago.
+    const detalle = err instanceof Error ? err.message : 'Error desconocido'
+    return NextResponse.json({ error: 'No pudimos iniciar el pago', detalle }, { status: 500 })
   }
 }

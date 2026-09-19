@@ -40,10 +40,14 @@ export function CuentaPausada({
         body: JSON.stringify({ plan: perfil.plan, ciclo: 'mensual' }),
       })
       const data = await res.json()
-      if (!res.ok || !data.initPoint) throw new Error(data.error ?? 'sin init_point')
+      if (!res.ok || !data.initPoint) throw new Error(data.detalle || data.error || 'sin init_point')
       window.location.href = data.initPoint
-    } catch {
-      toast('No pudimos iniciar el pago. Probá de nuevo en un momento.', { tono: 'aviso' })
+    } catch (err) {
+      const detalle = err instanceof Error ? err.message : undefined
+      toast(
+        detalle ? `No pudimos iniciar el pago: ${detalle}` : 'No pudimos iniciar el pago. Probá de nuevo en un momento.',
+        { tono: 'aviso' },
+      )
       setCargando(false)
     }
   }
