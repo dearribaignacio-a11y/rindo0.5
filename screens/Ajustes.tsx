@@ -210,7 +210,7 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
           Cerrar sesión
         </button>
 
-        <p className="mt-2 text-center text-[11.5px] text-ink-faint">Rindo · versión 0.1.1</p>
+        <p className="mt-2 text-center text-[11.5px] text-ink-faint">Rindo · versión 0.1.2</p>
 
         {esHogar && <AdSlot />}
       </Screen>
