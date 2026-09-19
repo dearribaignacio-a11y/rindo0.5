@@ -6,6 +6,7 @@ import {
   Bell,
   ChevronRight,
   CircleHelp,
+  CircleX,
   Coins,
   CreditCard,
   Languages,
@@ -29,7 +30,7 @@ import { useToast } from '@/components/ui/Toast'
 import { AdSlot } from '@/components/AdSlot'
 import { useNav } from '@/components/nav'
 import { PLANES, esComercial } from '@/lib/plans'
-import { resetDB, updateAjustes, updateFlags } from '@/lib/storage'
+import { cambiarPlan, resetDB, updateAjustes, updateFlags } from '@/lib/storage'
 import { createClient } from '@/lib/supabase/client'
 import { TEMAS } from '@/lib/temas'
 import { cn } from '@/lib/cn'
@@ -41,6 +42,7 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
   const toast = useToast()
   const [borrando, setBorrando] = useState(false)
   const [cerrando, setCerrando] = useState(false)
+  const [cancelando, setCancelando] = useState(false)
 
   async function cerrarSesion() {
     setCerrando(true)
@@ -168,6 +170,12 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
                 label="Impuestos"
                 valor={`${db.impuestos.length}`}
                 onClick={() => nav.push('impuestos')}
+              />
+              <Fila
+                icon={<CircleX className="size-[18px]" strokeWidth={1.9} />}
+                label="Cancelar suscripción"
+                tono="neg"
+                onClick={() => setCancelando(true)}
                 ultimo
               />
             </>
@@ -226,6 +234,22 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
         title="¿Borrar todos los datos?"
         description="Se eliminan productos, ventas y movimientos de tu cuenta (en todos los dispositivos), y la configuración de este dispositivo. Esta acción no se puede deshacer."
         confirmLabel="Borrar todo"
+      />
+
+      <ConfirmDialog
+        open={cancelando}
+        onClose={() => setCancelando(false)}
+        onConfirm={async () => {
+          try {
+            await cambiarPlan('hogar')
+            toast('Cancelaste la suscripción — volviste al plan Hogar', 'aviso')
+          } catch {
+            toast('No pudimos cancelar la suscripción. Probá de nuevo.', { tono: 'aviso' })
+          }
+        }}
+        title="¿Cancelar la suscripción?"
+        description="Volvés al plan Hogar (gratis) y no se te vuelve a cobrar. Tus productos, ventas y demás datos comerciales se mantienen, y podés volver a un plan pago cuando quieras."
+        confirmLabel="Cancelar suscripción"
       />
     </>
   )
