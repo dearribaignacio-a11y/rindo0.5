@@ -70,7 +70,14 @@ export function PagarConTarjeta() {
               const res = await fetch('/api/mercadopago/guardar-tarjeta', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ token: datos.token, plan, ciclo }),
+                body: JSON.stringify({
+                  token: datos.token,
+                  paymentMethodId: datos.payment_method_id,
+                  issuerId: datos.issuer_id,
+                  identificacion: datos.payer?.identification,
+                  plan,
+                  ciclo,
+                }),
               })
               const data = await res.json()
               if (!res.ok) throw new Error(data.detalle || data.error || 'error')

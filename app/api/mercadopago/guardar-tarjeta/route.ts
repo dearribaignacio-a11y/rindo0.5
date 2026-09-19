@@ -13,14 +13,17 @@ export const dynamic = 'force-dynamic'
  * primer mes. Si el cobro no se aprueba, no se activa el plan.
  */
 export async function POST(req: Request) {
-  const { token, plan, ciclo } = (await req.json()) as {
+  const { token, paymentMethodId, issuerId, identificacion, plan, ciclo } = (await req.json()) as {
     token?: string
+    paymentMethodId?: string
+    issuerId?: string
+    identificacion?: { type?: string; number?: string }
     plan?: PlanId
     ciclo?: 'mensual' | 'anual'
   }
 
-  if (!token) {
-    return NextResponse.json({ error: 'Falta el token de la tarjeta' }, { status: 400 })
+  if (!token || !paymentMethodId) {
+    return NextResponse.json({ error: 'Faltan datos de la tarjeta' }, { status: 400 })
   }
   if (!plan || !esComercial(plan)) {
     return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
@@ -40,6 +43,9 @@ export async function POST(req: Request) {
       userId: user.id,
       email: user.email,
       token,
+      paymentMethodId,
+      issuerId,
+      identificacion,
       plan,
       ciclo: ciclo === 'anual' ? 'anual' : 'mensual',
     })

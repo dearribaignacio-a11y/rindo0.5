@@ -73,6 +73,9 @@ export async function guardarTarjetaYCobrar(opts: {
   userId: string
   email: string
   token: string
+  paymentMethodId: string
+  issuerId?: string
+  identificacion?: { type?: string; number?: string }
   plan: Extract<PlanId, 'comercial' | 'comercial-pro'>
   ciclo: 'mensual' | 'anual'
 }): Promise<void> {
@@ -88,10 +91,17 @@ export async function guardarTarjetaYCobrar(opts: {
     body: {
       transaction_amount: monto,
       token: opts.token,
+      payment_method_id: opts.paymentMethodId,
+      issuer_id: opts.issuerId ? Number(opts.issuerId) : undefined,
       description: `Rindo — Plan ${plan.nombre} (${opts.ciclo === 'anual' ? 'anual' : 'mensual'})`,
       installments: 1,
       external_reference: opts.userId,
-      payer: { type: 'customer', id: customerId, email: opts.email },
+      payer: {
+        type: 'customer',
+        id: customerId,
+        email: opts.email,
+        identification: opts.identificacion,
+      },
     },
   })
 
@@ -110,19 +120,20 @@ export async function guardarTarjetaYCobrar(opts: {
     cardId = tarjetas[0]?.id
   }
   if (!cardId) {
-    // Mercado Pago no vincula al cliente tarjetas que no admiten cobro
-    // recurrente (típicamente prepagas): el pago se aprueba pero no queda
-    // nada guardado para cobrar el mes que viene. Como ya se cobró y no se
-    // va a poder usar esa tarjeta, se devuelve la plata en vez de quedarnos
-    // con un cobro que no sirve para nada.
+    // El pago se aprobó pero no quedó nada guardado para cobrar el mes que
+    // viene (pasa con algunas tarjetas, no sólo prepagas). Como ya se cobró
+    // y no se va a poder reusar esa tarjeta, se devuelve la plata en vez de
+    // quedarnos con un cobro que no sirve para nada.
     if (pago.id) {
       await new PaymentRefund(mp).total({ payment_id: pago.id }).catch(() => {
         // Si ni el reintegro se puede hacer solo, igual seguimos: el aviso
         // de abajo ya le dice al usuario que no siga con esa tarjeta.
       })
     }
+    // Detalle completo temporal, hasta confirmar que el fix de mandar
+    // payment_method_id/issuer_id/identification alcanza en todos los casos.
     throw new Error(
-      'Esa tarjeta no admite cobros automáticos (suele pasar con tarjetas prepagas). Se te devolvió el pago — probá con una tarjeta de crédito o débito.',
+      `Esa tarjeta no quedó guardada para cobros automáticos. Se te devolvió el pago — probá con otra tarjeta. (debug: pago.card=${JSON.stringify(pago.card ?? null)}, tarjetas=${JSON.stringify(tarjetas)})`,
     )
   }
 
