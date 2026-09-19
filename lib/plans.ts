@@ -16,7 +16,7 @@ import {
   Warehouse,
   type LucideIcon,
 } from 'lucide-react'
-import type { PlanId, Perfil } from './types'
+import type { PlanId } from './types'
 
 export interface FeaturePlan {
   /** Cada línea lleva su propio ícono: nada de diez checks iguales. */
@@ -61,10 +61,8 @@ export const PLANES: Record<PlanId, Plan> = {
     id: 'comercial',
     nombre: 'Comercial',
     bajada: 'Para tu negocio',
-    // TEMPORAL: precio real es 8900/89000 — bajado para probar el cobro con
-    // Mercado Pago sin gastar de más. Volver a los valores reales después.
-    mensual: 100,
-    anual: 100,
+    mensual: 8900,
+    anual: 89000,
     icon: Store,
     badge: 'Recomendado',
     recomendado: true,
@@ -81,9 +79,8 @@ export const PLANES: Record<PlanId, Plan> = {
     id: 'comercial-pro',
     nombre: 'Comercial Pro',
     bajada: 'Con Asistente IA',
-    // TEMPORAL: precio real es 14900/149000 — mismo motivo que Comercial.
-    mensual: 100,
-    anual: 100,
+    mensual: 14900,
+    anual: 149000,
     icon: Warehouse,
     badge: 'IA',
     conAnuncios: false,
@@ -100,15 +97,5 @@ export const PLANES: Record<PlanId, Plan> = {
 
 export const ORDEN_PLANES: PlanId[] = ['hogar', 'comercial', 'comercial-pro']
 
-export const esComercial = (plan: PlanId): plan is 'comercial' | 'comercial-pro' =>
-  plan === 'comercial' || plan === 'comercial-pro'
+export const esComercial = (plan: PlanId) => plan === 'comercial' || plan === 'comercial-pro'
 export const esPro = (plan: PlanId) => plan === 'comercial-pro'
-
-/** true si la cuenta tiene un plan pago sin el cobro al día — el Hogar
- *  nunca se bloquea, es gratis siempre. `perfil` puede venir null mientras
- *  se hidrata desde Supabase: se trata como no bloqueada para no tapar la
- *  app con el aviso de pago durante ese instante inicial. */
-export function cuentaBloqueada(perfil: Perfil | null): boolean {
-  if (!perfil) return false
-  return esComercial(perfil.plan) && !perfil.suscripcionActiva
-}

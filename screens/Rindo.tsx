@@ -19,7 +19,6 @@ import { ToastProvider } from '@/components/ui/Toast'
 import { Logo } from '@/components/ui/Logo'
 import { NavProvider, useNav } from '@/components/nav'
 import { Onboarding } from '@/screens/Onboarding'
-import { CuentaPausada } from '@/screens/CuentaPausada'
 import { Ajustes } from '@/screens/Ajustes'
 import {
   PantallaAyuda,
@@ -55,7 +54,7 @@ import {
   suscribirseAOperaciones,
   updateFlags,
 } from '@/lib/storage'
-import { cuentaBloqueada, esPro } from '@/lib/plans'
+import { esPro } from '@/lib/plans'
 import type { DB, PlanId } from '@/lib/types'
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -112,15 +111,6 @@ export function Rindo() {
           </ScreenTransition>
         )}
 
-        {fase === 'bloqueada' && db.perfil && (
-          <ScreenTransition key="bloqueada">
-            <CuentaPausada
-              perfil={db.perfil}
-              onCerrarSesion={() => aplicarTema(db.ajustes.tema)}
-            />
-          </ScreenTransition>
-        )}
-
         {fase === 'app' && (
           <ScreenTransition key="app">
             <NavProvider inicial={{ ruta: 'tabs' }}>
@@ -133,10 +123,9 @@ export function Rindo() {
   )
 }
 
-type Fase = 'onboarding' | 'bloqueada' | 'app'
+type Fase = 'onboarding' | 'app'
 
 function faseActual(db: DB): Fase {
-  if (cuentaBloqueada(db.perfil)) return 'bloqueada'
   if (!db.flags.onboardingVisto) return 'onboarding'
   return 'app'
 }

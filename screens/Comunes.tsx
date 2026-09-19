@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/Bits'
 import { Select } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
 import { useNav } from '@/components/nav'
-import { ORDEN_PLANES, PLANES, esComercial } from '@/lib/plans'
+import { ORDEN_PLANES, PLANES } from '@/lib/plans'
 import { TEMAS } from '@/lib/temas'
 import { aplicarTema, cambiarPlan, updatePerfil } from '@/lib/storage'
 import { createClient } from '@/lib/supabase/client'
@@ -395,7 +395,7 @@ export function PantallaPlanes({ db }: { db: DB }) {
   const [ciclo, setCiclo] = useState<'mensual' | 'anual'>('mensual')
   const [cambiando, setCambiando] = useState<PlanId | null>(null)
 
-  async function cambiar(pid: PlanId) {
+  function cambiar(pid: PlanId) {
     if (pid === actual) return
     if (!db.perfil) {
       // No debería pasar en uso normal: `perfil` se crea en el setup inicial.
@@ -406,14 +406,9 @@ export function PantallaPlanes({ db }: { db: DB }) {
       })
       return
     }
-
     setCambiando(pid)
-
-    // Bajar a Hogar es gratis e inmediato: sólo hay que avisarle a Mercado
-    // Pago que deje de cobrar la suscripción anterior, si había una.
-    if (!esComercial(pid)) {
+    setTimeout(async () => {
       try {
-        await fetch('/api/mercadopago/cancelar-suscripcion', { method: 'POST' }).catch(() => {})
         await cambiarPlan(pid)
         toast(`Ahora estás en el plan ${PLANES[pid].nombre}`)
         nav.reset('tabs')
@@ -422,31 +417,7 @@ export function PantallaPlanes({ db }: { db: DB }) {
       } finally {
         setCambiando(null)
       }
-      return
-    }
-
-    // Un plan pago no se activa solo: hay que autorizar el cobro recurrente
-    // en Mercado Pago primero. La cuenta queda en el plan nuevo pero
-    // bloqueada (ver `cuentaBloqueada` en `lib/plans.ts`) hasta que el
-    // webhook confirme que se autorizó.
-    try {
-      const res = await fetch('/api/mercadopago/crear-suscripcion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: pid, ciclo }),
-      })
-      const data = await res.json()
-      if (!res.ok || !data.initPoint) throw new Error(data.detalle || data.error || 'sin init_point')
-      await cambiarPlan(pid)
-      window.location.href = data.initPoint
-    } catch (err) {
-      const detalle = err instanceof Error ? err.message : undefined
-      toast(
-        detalle ? `No pudimos iniciar el pago: ${detalle}` : 'No pudimos iniciar el pago. Probá de nuevo en un momento.',
-        { tono: 'aviso' },
-      )
-      setCambiando(null)
-    }
+    }, 700)
   }
 
   return (
@@ -526,8 +497,7 @@ export function PantallaPlanes({ db }: { db: DB }) {
       </div>
 
       <p className="mt-5 text-center text-[12px] leading-relaxed text-ink-faint">
-        Los planes pagos te llevan a Mercado Pago para autorizar el cobro mensual. El plan Hogar es
-        gratis y el cambio es inmediato.
+        Es una demo: no se cobra nada y el cambio de plan es inmediato.
       </p>
     </Screen>
   )

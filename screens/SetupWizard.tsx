@@ -127,17 +127,11 @@ export function SetupWizard({
       return
     }
 
-    // `suscripcionActiva: true` acá no es "gratis para siempre": es el mismo
-    // default con el que arranca la fila en `profiles` (ver
-    // 0004_suscripcion.sql). Elegir un plan pago en el setup no arranca un
-    // cobro todavía — eso pasa recién si más adelante cambia de plan desde
-    // Ajustes, que sí dispara la suscripción real de Mercado Pago.
     const perfil: Perfil = comercial
       ? {
           nombre: nombreApellido,
           email,
           plan,
-          suscripcionActiva: true,
           moneda,
           negocio: negocio.trim(),
           rubro,
@@ -150,7 +144,6 @@ export function SetupWizard({
           nombre: nombreApellido,
           email,
           plan,
-          suscripcionActiva: true,
           moneda,
           integrantes,
           ingresoMensual: ingreso ?? undefined,

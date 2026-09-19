@@ -17,16 +17,6 @@ export type ProfileRow = {
   nombre_negocio: string | null
   telefono: string
   plan: 'hogar' | 'comercial' | 'comercial_pro'
-  /** Si la cuenta puede usar un plan pago o está bloqueada por falta de
-   *  pago. Sólo la escribe el webhook de Mercado Pago (Service Role Key) —
-   *  ver `supabase/migrations/0004_suscripcion.sql`. */
-  suscripcion_activa: boolean
-  mp_preapproval_id: string | null
-  /** Último estado crudo que mandó Mercado Pago (`authorized`, `paused`,
-   *  `cancelled`, `pending`) — no se usa para decidir nada, es para poder
-   *  ver en la base qué pasó sin tener que ir a buscarlo a la API de MP. */
-  mp_estado: string | null
-  suscripcion_actualizada_at: string | null
   created_at: string
   updated_at: string
 }

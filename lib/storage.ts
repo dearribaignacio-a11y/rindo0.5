@@ -155,15 +155,8 @@ export async function hidratarPerfil() {
   setDB((db) => ({
     ...db,
     perfil: db.perfil
-      ? { ...db.perfil, plan: remoto.plan, suscripcionActiva: remoto.suscripcionActiva }
-      : {
-          nombre: remoto.nombre,
-          email: remoto.email,
-          plan: remoto.plan,
-          suscripcionActiva: remoto.suscripcionActiva,
-          moneda: 'ARS',
-          negocio: remoto.negocio,
-        },
+      ? { ...db.perfil, plan: remoto.plan }
+      : { nombre: remoto.nombre, email: remoto.email, plan: remoto.plan, moneda: 'ARS', negocio: remoto.negocio },
     // Repara cuentas Hogar que quedaron sin categorías (bug ya corregido en
     // `sembrar`/`resetDB`, pero esto cubre a las cuentas creadas mientras
     // estuvo roto): sin ninguna, "Nuevo movimiento" no deja elegir categoría.
