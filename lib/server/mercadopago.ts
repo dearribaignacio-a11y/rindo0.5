@@ -30,7 +30,16 @@ export async function crearSuscripcion(opts: {
   if (!mp) throw new Error('Falta MERCADOPAGO_ACCESS_TOKEN en el servidor')
 
   const plan = PLANES[opts.plan]
-  const monto = opts.ciclo === 'anual' ? plan.anual : plan.mensual
+  // MERCADOPAGO_TEST_MONTO (temporal): para probar con credenciales reales
+  // sin cobrar el precio de lista — se saca del entorno una vez confirmado
+  // que el flujo funciona, y ahí sí cobra el precio real de cada plan.
+  const montoPrueba = Number(process.env.MERCADOPAGO_TEST_MONTO)
+  const monto =
+    Number.isFinite(montoPrueba) && montoPrueba > 0
+      ? montoPrueba
+      : opts.ciclo === 'anual'
+        ? plan.anual
+        : plan.mensual
 
   // `payer_email` es obligatorio para crear una preapproval "suelta" (sin
   // `preapproval_plan_id`). Con credenciales de PRUEBA tiene que ser el mail
