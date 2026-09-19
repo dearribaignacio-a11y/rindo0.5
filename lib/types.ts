@@ -26,6 +26,9 @@ export interface Perfil {
   nombre: string
   email: string
   plan: PlanId
+  /** false = plan pago sin cobro al día; la app le muestra la pantalla de
+   *  reactivar en vez del contenido normal. El plan Hogar no la usa nunca. */
+  suscripcionActiva: boolean
   moneda: string
   /* Hogar */
   integrantes?: number

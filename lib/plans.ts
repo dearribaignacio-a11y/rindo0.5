@@ -16,7 +16,7 @@ import {
   Warehouse,
   type LucideIcon,
 } from 'lucide-react'
-import type { PlanId } from './types'
+import type { PlanId, Perfil } from './types'
 
 export interface FeaturePlan {
   /** Cada línea lleva su propio ícono: nada de diez checks iguales. */
@@ -97,5 +97,15 @@ export const PLANES: Record<PlanId, Plan> = {
 
 export const ORDEN_PLANES: PlanId[] = ['hogar', 'comercial', 'comercial-pro']
 
-export const esComercial = (plan: PlanId) => plan === 'comercial' || plan === 'comercial-pro'
+export const esComercial = (plan: PlanId): plan is 'comercial' | 'comercial-pro' =>
+  plan === 'comercial' || plan === 'comercial-pro'
 export const esPro = (plan: PlanId) => plan === 'comercial-pro'
+
+/** true si la cuenta tiene un plan pago sin el cobro al día — el Hogar
+ *  nunca se bloquea, es gratis siempre. `perfil` puede venir null mientras
+ *  se hidrata desde Supabase: se trata como no bloqueada para no tapar la
+ *  app con el aviso de pago durante ese instante inicial. */
+export function cuentaBloqueada(perfil: Perfil | null): boolean {
+  if (!perfil) return false
+  return esComercial(perfil.plan) && !perfil.suscripcionActiva
+}
