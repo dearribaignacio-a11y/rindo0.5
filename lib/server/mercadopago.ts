@@ -22,6 +22,7 @@ function urlBase(): string {
  *  de pago (`init_point`) al que hay que mandar al usuario a autorizarla. */
 export async function crearSuscripcion(opts: {
   userId: string
+  email: string
   plan: Extract<PlanId, 'comercial' | 'comercial-pro'>
   ciclo: 'mensual' | 'anual'
 }): Promise<string> {
@@ -31,17 +32,18 @@ export async function crearSuscripcion(opts: {
   const plan = PLANES[opts.plan]
   const monto = opts.ciclo === 'anual' ? plan.anual : plan.mensual
 
-  // Sin `payer_email`: si se manda el mail de la cuenta de Rindo (una cuenta
-  // real), Mercado Pago tira "Payer is associated with a different site" en
-  // cuanto se usan credenciales de prueba, porque el sandbox no reconoce
-  // cuentas reales. Dejando el campo afuera, es la propia pantalla de pago
-  // de Mercado Pago la que le pide el login al comprador — ahí sí entra con
-  // su usuario de prueba (o su cuenta real, en producción).
+  // `payer_email` es obligatorio para crear una preapproval "suelta" (sin
+  // `preapproval_plan_id`). Con credenciales de PRUEBA tiene que ser el mail
+  // de un "usuario de prueba" comprador generado en el panel de Mercado
+  // Pago — un mail real (de una cuenta real) hace fallar la creación con
+  // "Payer is associated with a different site". En producción, en cambio,
+  // acá sí va el mail real del usuario: es el flujo normal.
   const preapproval = new PreApproval(mp)
   const res = await preapproval.create({
     body: {
       reason: `Rindo — Plan ${plan.nombre} (${opts.ciclo === 'anual' ? 'anual' : 'mensual'})`,
       external_reference: opts.userId,
+      payer_email: opts.email,
       back_url: `${urlBase()}/dashboard`,
       auto_recurring: {
         frequency: opts.ciclo === 'anual' ? 12 : 1,
