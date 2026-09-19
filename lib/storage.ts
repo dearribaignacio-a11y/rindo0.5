@@ -31,6 +31,7 @@ import type {
   Venta,
 } from './types'
 import { ahoraISO, hoyISO } from './format'
+import { CATEGORIAS_HOGAR } from './seed'
 import * as negocio from './supabase/negocio'
 import * as operaciones from './supabase/operaciones'
 
@@ -156,6 +157,13 @@ export async function hidratarPerfil() {
     perfil: db.perfil
       ? { ...db.perfil, plan: remoto.plan }
       : { nombre: remoto.nombre, email: remoto.email, plan: remoto.plan, moneda: 'ARS', negocio: remoto.negocio },
+    // Repara cuentas Hogar que quedaron sin categorías (bug ya corregido en
+    // `sembrar`/`resetDB`, pero esto cubre a las cuentas creadas mientras
+    // estuvo roto): sin ninguna, "Nuevo movimiento" no deja elegir categoría.
+    categorias:
+      remoto.plan === 'hogar' && db.categorias.length === 0
+        ? CATEGORIAS_HOGAR.map((c) => ({ ...c, id: id() }))
+        : db.categorias,
   }))
 }
 
@@ -527,9 +535,13 @@ export function limpiarPreciosIgnorados() {
 /** Fija el perfil de la cuenta. Se llama al terminar el setup inicial. No
  *  carga datos de ejemplo: una cuenta nueva arranca vacía, como cualquier
  *  cuenta real — antes sembraba productos/ventas/movimientos de mentira,
- *  pero confundía a un comerciante real ver actividad que nunca cargó. */
+ *  pero confundía a un comerciante real ver actividad que nunca cargó. La
+ *  excepción es la taxonomía de categorías del Hogar (ver `CATEGORIAS_HOGAR`):
+ *  sin al menos una, "Nuevo movimiento" no tiene qué ofrecer para elegir. */
 export function sembrar(perfil: Perfil) {
-  setDB((db) => ({ ...db, perfil }))
+  const categorias: Categoria[] =
+    perfil.plan === 'hogar' ? CATEGORIAS_HOGAR.map((c) => ({ ...c, id: id() })) : []
+  setDB((db) => ({ ...db, perfil, categorias }))
 }
 
 export function cerrarSesion() {
@@ -552,7 +564,9 @@ export async function resetDB() {
     // para no dejar la app en un estado peor que antes de tocar el botón.
   })
   const { perfil, empresa, empleados, flags } = getDB()
-  cache = { ...dbVacia(), perfil, empresa, empleados, flags }
+  const categorias: Categoria[] =
+    perfil?.plan === 'hogar' ? CATEGORIAS_HOGAR.map((c) => ({ ...c, id: id() })) : []
+  cache = { ...dbVacia(), perfil, empresa, empleados, flags, categorias }
   escribirDisco(cache)
   if (typeof document !== 'undefined') document.documentElement.removeAttribute('data-theme')
   try {

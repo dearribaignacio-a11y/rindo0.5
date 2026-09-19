@@ -9,6 +9,23 @@
  * cuenta nueva arranca sin datos, como corresponde.
  */
 
+import type { Categoria } from './types'
+
+/** Categorías con las que arranca toda cuenta del plan Hogar. No son "datos
+ *  de ejemplo" (no hay movimientos ni montos inventados) — son la taxonomía
+ *  mínima para poder cargar un movimiento el primer día, porque sin al menos
+ *  una categoría el selector de "Nuevo movimiento" queda vacío y no se puede
+ *  guardar nada. El usuario las puede editar o borrar libremente después. */
+export const CATEGORIAS_HOGAR: Omit<Categoria, 'id'>[] = [
+  { nombre: 'Sueldo', icono: 'sueldo', color: 'pos', limite: 0 },
+  { nombre: 'Comida', icono: 'comida', color: 'accent', limite: 0 },
+  { nombre: 'Transporte', icono: 'auto', color: 'warn', limite: 0 },
+  { nombre: 'Servicios', icono: 'rayo', color: 'teal', limite: 0 },
+  { nombre: 'Ocio', icono: 'ocio', color: 'arena', limite: 0 },
+  { nombre: 'Salud', icono: 'salud', color: 'neg', limite: 0 },
+  { nombre: 'Otros', icono: 'otros', color: 'ladrillo', limite: 0 },
+]
+
 export const RUBROS = [
   'Almacén',
   'Kiosco',
