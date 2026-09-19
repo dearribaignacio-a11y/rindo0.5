@@ -24,14 +24,13 @@ export async function POST(req: Request) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user?.email) {
+  if (!user) {
     return NextResponse.json({ error: 'No hay sesión activa' }, { status: 401 })
   }
 
   try {
     const initPoint = await crearSuscripcion({
       userId: user.id,
-      email: user.email,
       plan,
       ciclo: ciclo === 'anual' ? 'anual' : 'mensual',
     })
