@@ -98,7 +98,17 @@ export async function guardarTarjetaYCobrar(opts: {
   if (pago.status !== 'approved') {
     throw new Error(`El pago no se aprobó: ${pago.status_detail ?? pago.status}`)
   }
-  if (!pago.card?.id) {
+
+  // La API no siempre trae la tarjeta en la respuesta del pago mismo — de
+  // respaldo, se busca en las tarjetas guardadas del cliente (a esta altura
+  // ya tiene la que se acaba de usar, por el pago recién aprobado).
+  let cardId = pago.card?.id
+  if (!cardId) {
+    const customer = new Customer(mp)
+    const tarjetas = await customer.listCards({ customerId })
+    cardId = tarjetas[0]?.id
+  }
+  if (!cardId) {
     throw new Error('Mercado Pago no devolvió la tarjeta guardada')
   }
 
@@ -111,7 +121,7 @@ export async function guardarTarjetaYCobrar(opts: {
     .update({
       plan: planADB(opts.plan),
       mp_customer_id: customerId,
-      mp_card_id: pago.card.id,
+      mp_card_id: cardId,
       suscripcion_activa: true,
       proximo_cobro: proximoCobro.toISOString().slice(0, 10),
       mp_ultimo_pago_id: String(pago.id ?? ''),
