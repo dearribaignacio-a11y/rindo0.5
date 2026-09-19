@@ -105,6 +105,15 @@ export async function guardarTarjetaYCobrar(opts: {
     },
   })
 
+  if (pago.status === 'pending' || pago.status === 'in_process') {
+    // No es un rechazo: Mercado Pago puso el pago en revisión manual por su
+    // propio sistema antifraude (común en pagos reales nuevos, más todavía
+    // después de varios intentos seguidos). Puede tardar minutos u horas en
+    // resolverse solo — no hay nada que hacer del lado de la app.
+    throw new Error(
+      'Mercado Pago puso este pago en revisión por seguridad (no lo rechazó). Puede tardar un rato en resolverse solo — probá de nuevo más tarde o con otra tarjeta.',
+    )
+  }
   if (pago.status !== 'approved') {
     throw new Error(`El pago no se aprobó: ${pago.status_detail ?? pago.status}`)
   }
