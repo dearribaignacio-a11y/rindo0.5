@@ -36,14 +36,20 @@ export async function crearSuscripcion(opts: {
   // `preapproval_plan_id`). Con credenciales de PRUEBA tiene que ser el mail
   // de un "usuario de prueba" comprador generado en el panel de Mercado
   // Pago — un mail real (de una cuenta real) hace fallar la creación con
-  // "Payer is associated with a different site". En producción, en cambio,
-  // acá sí va el mail real del usuario: es el flujo normal.
+  // "Payer is associated with a different site". Ese mail de prueba no
+  // recibe correo real, así que no sirve para el signup de Rindo: se puede
+  // pisar sólo para esta llamada con `MERCADOPAGO_TEST_PAYER_EMAIL` (variable
+  // temporal, sólo para probar) sin tocar la cuenta real con la que se
+  // inició sesión en Rindo. En producción esa variable no existe y se usa
+  // directo el mail real del usuario, que es el flujo correcto.
+  const payerEmail = process.env.MERCADOPAGO_TEST_PAYER_EMAIL || opts.email
+
   const preapproval = new PreApproval(mp)
   const res = await preapproval.create({
     body: {
       reason: `Rindo — Plan ${plan.nombre} (${opts.ciclo === 'anual' ? 'anual' : 'mensual'})`,
       external_reference: opts.userId,
-      payer_email: opts.email,
+      payer_email: payerEmail,
       back_url: `${urlBase()}/dashboard`,
       auto_recurring: {
         frequency: opts.ciclo === 'anual' ? 12 : 1,
