@@ -127,16 +127,16 @@ export function SetupWizard({
       return
     }
 
-    // `suscripcionActiva: true` acá no es "gratis para siempre": es el mismo
-    // default con el que arranca la fila en `profiles`. Elegir un plan pago
-    // en el setup no carga ninguna tarjeta todavía — eso pasa recién si más
-    // adelante cambia de plan desde Ajustes, que ahí sí pide la tarjeta.
+    // Un plan pago elegido acá arranca SIN la suscripción activa: apenas
+    // entre, `cuentaBloqueada` (lib/plans.ts) lo manda a cargar la tarjeta
+    // antes de dejarlo usar la app — si no, quedaba usando el plan pago
+    // gratis para siempre, porque nunca pasaba por "Cambiar plan".
     const perfil: Perfil = comercial
       ? {
           nombre: nombreApellido,
           email,
           plan,
-          suscripcionActiva: true,
+          suscripcionActiva: false,
           moneda,
           negocio: negocio.trim(),
           rubro,
