@@ -17,8 +17,17 @@ let inicializado = false
 
 /** Estilo de los campos seguros de Mercado Pago (número, vencimiento, CVV):
  *  son iframes de otro dominio, así que no heredan el CSS de la página —
- *  hay que pasarles los valores a mano para que no desentonen. */
-const ESTILO_CAMPO = { color: '#e8e8ea', fontSize: '15px', placeholderColor: '#6b6b70' }
+ *  hay que pasarles los valores a mano para que no desentonen. Sin
+ *  `height`/`padding` explícitos, el iframe no llena la cajita del
+ *  contenedor y el texto queda mal ubicado. */
+const ESTILO_CAMPO = {
+  color: '#e8e8ea',
+  fontSize: '15px',
+  placeholderColor: '#6b6b70',
+  height: '46px',
+  width: '100%',
+  padding: '0 14px',
+}
 
 /**
  * Alta de la tarjeta para un plan pago. Los tres campos sensibles (número,
@@ -115,19 +124,19 @@ export function PagarConTarjeta() {
       {listo && (
         <div className="space-y-4">
           <Field label="Número de tarjeta">
-            <div className="h-12 rounded-input border border-line-strong bg-surface-2 px-3.5">
+            <div className="h-[46px] overflow-hidden rounded-input border border-line-strong bg-surface-2">
               <CardNumber placeholder="1234 1234 1234 1234" style={ESTILO_CAMPO} />
             </div>
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Vencimiento">
-              <div className="h-12 rounded-input border border-line-strong bg-surface-2 px-3.5">
+              <div className="h-[46px] overflow-hidden rounded-input border border-line-strong bg-surface-2">
                 <ExpirationDate mode="short" placeholder="MM/AA" style={ESTILO_CAMPO} />
               </div>
             </Field>
             <Field label="Código de seguridad">
-              <div className="h-12 rounded-input border border-line-strong bg-surface-2 px-3.5">
+              <div className="h-[46px] overflow-hidden rounded-input border border-line-strong bg-surface-2">
                 <SecurityCode placeholder="123" style={ESTILO_CAMPO} />
               </div>
             </Field>
