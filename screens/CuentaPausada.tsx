@@ -16,8 +16,9 @@ import type { Perfil } from '@/lib/types'
 
 /**
  * Reemplaza toda la app cuando `cuentaBloqueada(perfil)` da true (ver
- * `lib/plans.ts`): el cobro mensual con la tarjeta guardada falló (vencida,
- * sin fondos, etc.). Se renderiza en vez del shell normal en
+ * `lib/plans.ts`): pasó la fecha de pago del mes y todavía no se volvió a
+ * pagar (no hay tarjeta guardada — cada cobro es manual, ver
+ * `screens/PagarConTarjeta.tsx`). Se renderiza en vez del shell normal en
  * `screens/Rindo.tsx`, no como una pantalla más de la navegación interna.
  */
 export function CuentaPausada({
@@ -58,9 +59,9 @@ function AvisoBloqueo({ perfil, onCerrarSesion }: { perfil: Perfil; onCerrarSesi
     onCerrarSesion()
   }
 
-  /** Para quien no quiere seguir pagando: vuelve a Hogar (gratis). La
-   *  tarjeta guardada en Mercado Pago queda ahí sin que se le vuelva a
-   *  cobrar nada — nada la usa una vez que el plan deja de ser pago. */
+  /** Para quien no quiere seguir pagando: vuelve a Hogar (gratis), sin
+   *  nada más que hacer — como no hay tarjeta guardada, no hay nada que
+   *  cancelar del lado de Mercado Pago. */
   async function volverAHogar() {
     setVolviendo(true)
     try {
@@ -80,8 +81,8 @@ function AvisoBloqueo({ perfil, onCerrarSesion }: { perfil: Perfil; onCerrarSesi
         </span>
         <h1 className="text-[20px] font-semibold text-ink">Tu cuenta está pausada</h1>
         <p className="mt-2 max-w-[32ch] text-[14px] leading-relaxed text-ink-faint">
-          No pudimos cobrar el plan {plan.nombre} con tu tarjeta guardada. Actualizala para volver a
-          usar Rindo — tus datos siguen ahí, no se borró nada.
+          Venció el pago del plan {plan.nombre} y todavía no se renovó. Pagalo de nuevo para volver
+          a usar Rindo — tus datos siguen ahí, no se borró nada.
         </p>
 
         <Card className="mt-6 w-full max-w-sm p-4">
@@ -97,7 +98,7 @@ function AvisoBloqueo({ perfil, onCerrarSesion }: { perfil: Perfil; onCerrarSesi
           className="mt-6 max-w-sm"
           onClick={() => nav.push('pagar-tarjeta', { plan: perfil.plan, ciclo: 'mensual' })}
         >
-          Actualizar tarjeta y pagar
+          Pagar ahora
         </Button>
 
         <button

@@ -30,15 +30,17 @@ const ESTILO_CAMPO = {
 }
 
 /**
- * Alta de la tarjeta para un plan pago. Los tres campos sensibles (número,
- * vencimiento, CVV) son "Secure Fields" de Mercado Pago — iframes que se
- * montan acá pero viven en su dominio, así que ese dato nunca pasa por
- * nuestro código ni por nuestro servidor. `createCardToken` lee esos campos
- * montados y devuelve una ficha de un solo uso, sin exponer el número real.
+ * Pago de un plan pago (alta o renovación mensual/anual). Los tres campos
+ * sensibles (número, vencimiento, CVV) son "Secure Fields" de Mercado Pago
+ * — iframes que se montan acá pero viven en su dominio, así que ese dato
+ * nunca pasa por nuestro código ni por nuestro servidor. `createCardToken`
+ * lee esos campos montados y devuelve una ficha de un solo uso, que el
+ * servidor usa para cobrar directo (ver `lib/server/mercadopago.ts`).
  *
- * Se usan Secure Fields en vez del Brick de pago porque el token que arma el
- * Brick no sirve para "guardar tarjeta" (Mercado Pago lo rechaza con
- * "security_code_id can't be null") — está pensado sólo para pagos únicos.
+ * No queda ninguna tarjeta guardada de un mes a otro — hay que volver a
+ * cargarla cada vez que toca pagar. Se intentó guardarla para cobrar sola,
+ * pero esa función de Mercado Pago (`customer.createCard`) fallaba siempre
+ * con "security_code_id can't be null" sin que se pudiera resolver.
  */
 export function PagarConTarjeta() {
   const nav = useNav()
@@ -88,10 +90,15 @@ export function PagarConTarjeta() {
       })
       if (!token?.id) throw new Error('No pudimos leer los datos de la tarjeta')
 
-      const res = await fetch('/api/mercadopago/guardar-tarjeta', {
+      const res = await fetch('/api/mercadopago/cobrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: token.id, plan, ciclo }),
+        body: JSON.stringify({
+          token: token.id,
+          identificacion: { type: 'DNI', number: dni.trim() },
+          plan,
+          ciclo,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detalle || data.error || 'error')
@@ -117,8 +124,8 @@ export function PagarConTarjeta() {
       />
 
       <p className="mb-4 text-[12.5px] leading-relaxed text-ink-faint">
-        Cargá tu tarjeta una sola vez — el próximo cobro se hace solo cada {ciclo === 'anual' ? 'año' : 'mes'}, sin
-        que tengas que volver a hacer nada. El número de tarjeta nunca pasa por nuestros servidores.
+        El número de tarjeta nunca pasa por nuestros servidores. Vas a tener que volver a cargarla
+        cada vez que toque pagar (cada {ciclo === 'anual' ? 'año' : 'mes'}) — te vamos a avisar acá en la app.
       </p>
 
       {listo && (

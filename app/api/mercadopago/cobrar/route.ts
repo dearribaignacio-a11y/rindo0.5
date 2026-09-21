@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { guardarTarjetaYCobrar } from '@/lib/server/mercadopago'
+import { cobrarPlan } from '@/lib/server/mercadopago'
 import { esComercial } from '@/lib/plans'
 import type { PlanId } from '@/lib/types'
 
@@ -9,12 +9,13 @@ export const dynamic = 'force-dynamic'
 
 /**
  * Recibe el token de tarjeta que generaron los Secure Fields en el
- * navegador (`@mercadopago/sdk-react`), guarda la tarjeta en Mercado Pago y
- * cobra el primer mes. Si el cobro no se aprueba, no se activa el plan.
+ * navegador (`@mercadopago/sdk-react`) y cobra el plan elegido. Si se
+ * aprueba, activa el plan por un mes (o un año) más; si no, no toca nada.
  */
 export async function POST(req: Request) {
-  const { token, plan, ciclo } = (await req.json()) as {
+  const { token, identificacion, plan, ciclo } = (await req.json()) as {
     token?: string
+    identificacion?: { type?: string; number?: string }
     plan?: PlanId
     ciclo?: 'mensual' | 'anual'
   }
@@ -36,16 +37,17 @@ export async function POST(req: Request) {
   }
 
   try {
-    await guardarTarjetaYCobrar({
+    await cobrarPlan({
       userId: user.id,
       email: user.email,
       token,
+      identificacion,
       plan,
       ciclo: ciclo === 'anual' ? 'anual' : 'mensual',
     })
     return NextResponse.json({ ok: true })
   } catch (err) {
-    console.error('guardar-tarjeta', err)
+    console.error('cobrar', err)
     const detalle = err instanceof Error ? err.message : 'Error desconocido'
     return NextResponse.json({ error: 'No pudimos procesar el pago', detalle }, { status: 500 })
   }

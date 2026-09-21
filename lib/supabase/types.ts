@@ -17,15 +17,13 @@ export type ProfileRow = {
   nombre_negocio: string | null
   telefono: string
   plan: 'hogar' | 'comercial' | 'comercial_pro'
-  /** Referencias a Mercado Pago de la tarjeta guardada — nunca el número de
-   *  tarjeta en sí, eso vive solo del lado de MP. Sólo las escribe el
-   *  servidor (Service Role Key) — ver `0004_tarjeta_guardada.sql`. */
-  mp_customer_id: string | null
-  mp_card_id: string | null
   /** Si la cuenta puede usar un plan pago o está bloqueada por falta de
-   *  pago. El Hogar no la usa nunca (es gratis). */
+   *  pago. El Hogar no la usa nunca (es gratis). Sólo la escribe el
+   *  servidor (Service Role Key). */
   suscripcion_activa: boolean
-  /** Fecha del próximo cobro automático — la revisa el cron mensual. */
+  /** Fecha límite del período ya pagado — el cron diario bloquea la cuenta
+   *  si se pasó y no se volvió a pagar (no hay tarjeta guardada, cada cobro
+   *  es manual, ver `lib/server/mercadopago.ts`). */
   proximo_cobro: string | null
   mp_ultimo_pago_id: string | null
   created_at: string
