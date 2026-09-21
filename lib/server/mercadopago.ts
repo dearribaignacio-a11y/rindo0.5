@@ -1,4 +1,4 @@
-import { MercadoPagoConfig, Customer, CardToken, Payment, PaymentRefund } from 'mercadopago'
+import { MercadoPagoConfig, Customer, CardToken, Payment } from 'mercadopago'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { planADB } from '@/lib/supabase/types'
 import { PLANES } from '@/lib/plans'
@@ -59,23 +59,20 @@ async function cobrarConTarjetaGuardada(
   }
 }
 
-/** Alta de la tarjeta + primer cobro. El `token` viene del formulario de
- *  tarjeta (Brick de `@mercadopago/sdk-react`) corriendo en el navegador —
- *  ni el número ni el CVV pasan nunca por este servidor, sólo esta ficha de
- *  un solo uso. Si el primer cobro no se aprueba, no se activa el plan.
+/** Alta de la tarjeta + primer cobro. El `token` viene de los Secure Fields
+ *  (número, vencimiento, CVV) montados en el navegador — ni el número ni el
+ *  CVV pasan nunca por este servidor, sólo esta ficha de un solo uso.
  *
- *  Importante: NO se llama a "guardar tarjeta" (`customer.createCard`) por
- *  separado — ese endpoint rechaza el token del Brick con "security_code_id
- *  can't be null". El mecanismo correcto es cobrar directo con `payer.type:
- *  'customer'`: Mercado Pago guarda la tarjeta como efecto del pago mismo, y
- *  la devuelve en `pago.card.id`, lista para usarse en renovaciones futuras. */
+ *  Importante: el token de Secure Fields SÍ sirve para `customer.createCard`
+ *  (a diferencia del que arma el Brick de pago, que Mercado Pago rechaza ahí
+ *  con "security_code_id can't be null" — ver commits anteriores). Por eso
+ *  acá primero se guarda la tarjeta y recién después se cobra, con el mismo
+ *  mecanismo que usan las renovaciones (`cobrarConTarjetaGuardada`): así, si
+ *  el cobro fallara, la tarjeta ya quedó guardada para reintentar. */
 export async function guardarTarjetaYCobrar(opts: {
   userId: string
   email: string
   token: string
-  paymentMethodId: string
-  issuerId?: string
-  identificacion?: { type?: string; number?: string }
   plan: Extract<PlanId, 'comercial' | 'comercial-pro'>
   ciclo: 'mensual' | 'anual'
 }): Promise<void> {
@@ -83,67 +80,34 @@ export async function guardarTarjetaYCobrar(opts: {
   if (!mp) throw new Error('Falta MERCADOPAGO_ACCESS_TOKEN en el servidor')
 
   const customerId = await buscarOCrearCliente(mp, opts.email)
+
+  const customer = new Customer(mp)
+  const tarjeta = await customer.createCard({ customerId, body: { token: opts.token } })
+  if (!tarjeta.id) throw new Error('Mercado Pago no devolvió un card_id')
+
   const plan = PLANES[opts.plan]
   const monto = opts.ciclo === 'anual' ? plan.anual : plan.mensual
 
-  const payment = new Payment(mp)
-  const pago = await payment.create({
-    body: {
-      transaction_amount: monto,
-      token: opts.token,
-      payment_method_id: opts.paymentMethodId,
-      issuer_id: opts.issuerId ? Number(opts.issuerId) : undefined,
-      description: `Rindo — Plan ${plan.nombre} (${opts.ciclo === 'anual' ? 'anual' : 'mensual'})`,
-      installments: 1,
-      external_reference: opts.userId,
-      payer: {
-        type: 'customer',
-        id: customerId,
-        email: opts.email,
-        identification: opts.identificacion,
-      },
-    },
+  const pago = await cobrarConTarjetaGuardada(mp, {
+    customerId,
+    cardId: tarjeta.id,
+    email: opts.email,
+    monto,
+    descripcion: `Rindo — Plan ${plan.nombre} (${opts.ciclo === 'anual' ? 'anual' : 'mensual'})`,
+    externalReference: opts.userId,
   })
 
-  if (pago.status === 'pending' || pago.status === 'in_process') {
+  if (pago.detalle === 'pending_review_manual' || pago.detalle === 'pending' || pago.detalle === 'in_process') {
     // No es un rechazo: Mercado Pago puso el pago en revisión manual por su
     // propio sistema antifraude (común en pagos reales nuevos, más todavía
-    // después de varios intentos seguidos). Puede tardar minutos u horas en
-    // resolverse solo — no hay nada que hacer del lado de la app.
+    // después de varios intentos seguidos). La tarjeta ya quedó guardada —
+    // cuando se resuelva, el cron de renovaciones la va a volver a intentar.
     throw new Error(
-      'Mercado Pago puso este pago en revisión por seguridad (no lo rechazó). Puede tardar un rato en resolverse solo — probá de nuevo más tarde o con otra tarjeta.',
+      'Mercado Pago puso este pago en revisión por seguridad (no lo rechazó). Tu tarjeta ya quedó guardada — probá de nuevo más tarde.',
     )
   }
-  if (pago.status !== 'approved') {
-    throw new Error(`El pago no se aprobó: ${pago.status_detail ?? pago.status}`)
-  }
-
-  // La API no siempre trae la tarjeta en la respuesta del pago mismo — de
-  // respaldo, se busca en las tarjetas guardadas del cliente (a esta altura
-  // ya tiene la que se acaba de usar, por el pago recién aprobado).
-  let cardId = pago.card?.id
-  let tarjetas: Awaited<ReturnType<Customer['listCards']>> = []
-  if (!cardId) {
-    const customer = new Customer(mp)
-    tarjetas = await customer.listCards({ customerId })
-    cardId = tarjetas[0]?.id
-  }
-  if (!cardId) {
-    // El pago se aprobó pero no quedó nada guardado para cobrar el mes que
-    // viene (pasa con algunas tarjetas, no sólo prepagas). Como ya se cobró
-    // y no se va a poder reusar esa tarjeta, se devuelve la plata en vez de
-    // quedarnos con un cobro que no sirve para nada.
-    if (pago.id) {
-      await new PaymentRefund(mp).total({ payment_id: pago.id }).catch(() => {
-        // Si ni el reintegro se puede hacer solo, igual seguimos: el aviso
-        // de abajo ya le dice al usuario que no siga con esa tarjeta.
-      })
-    }
-    // Detalle completo temporal, hasta confirmar que el fix de mandar
-    // payment_method_id/issuer_id/identification alcanza en todos los casos.
-    throw new Error(
-      `Esa tarjeta no quedó guardada para cobros automáticos. Se te devolvió el pago — probá con otra tarjeta. (debug: pago.card=${JSON.stringify(pago.card ?? null)}, tarjetas=${JSON.stringify(tarjetas)})`,
-    )
+  if (!pago.aprobado) {
+    throw new Error(`El pago no se aprobó: ${pago.detalle}`)
   }
 
   const proximoCobro = new Date()
@@ -155,10 +119,10 @@ export async function guardarTarjetaYCobrar(opts: {
     .update({
       plan: planADB(opts.plan),
       mp_customer_id: customerId,
-      mp_card_id: cardId,
+      mp_card_id: tarjeta.id,
       suscripcion_activa: true,
       proximo_cobro: proximoCobro.toISOString().slice(0, 10),
-      mp_ultimo_pago_id: String(pago.id ?? ''),
+      mp_ultimo_pago_id: pago.id,
     })
     .eq('id', opts.userId)
   if (error) throw error

@@ -1,7 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CardPayment, initMercadoPago } from '@mercadopago/sdk-react'
+import { CardNumber, ExpirationDate, SecurityCode, createCardToken, initMercadoPago } from '@mercadopago/sdk-react'
+import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
+import { Field } from '@/components/ui/Field'
 import { Screen, TopBar } from '@/components/ui/Screen'
 import { useToast } from '@/components/ui/Toast'
 import { useNav } from '@/components/nav'
@@ -12,11 +15,21 @@ import type { PlanId } from '@/lib/types'
 
 let inicializado = false
 
+/** Estilo de los campos seguros de Mercado Pago (número, vencimiento, CVV):
+ *  son iframes de otro dominio, así que no heredan el CSS de la página —
+ *  hay que pasarles los valores a mano para que no desentonen. */
+const ESTILO_CAMPO = { color: '#e8e8ea', fontSize: '15px', placeholderColor: '#6b6b70' }
+
 /**
- * Alta de la tarjeta para un plan pago. El formulario en sí (número, CVV,
- * vencimiento) es el Brick de Mercado Pago — nada de eso pasa por nuestro
- * código ni por nuestro servidor, sólo el token de un solo uso que devuelve
- * al terminar. Ver `lib/server/mercadopago.ts` para lo que pasa después.
+ * Alta de la tarjeta para un plan pago. Los tres campos sensibles (número,
+ * vencimiento, CVV) son "Secure Fields" de Mercado Pago — iframes que se
+ * montan acá pero viven en su dominio, así que ese dato nunca pasa por
+ * nuestro código ni por nuestro servidor. `createCardToken` lee esos campos
+ * montados y devuelve una ficha de un solo uso, sin exponer el número real.
+ *
+ * Se usan Secure Fields en vez del Brick de pago porque el token que arma el
+ * Brick no sirve para "guardar tarjeta" (Mercado Pago lo rechaza con
+ * "security_code_id can't be null") — está pensado sólo para pagos únicos.
  */
 export function PagarConTarjeta() {
   const nav = useNav()
@@ -28,6 +41,8 @@ export function PagarConTarjeta() {
   const monto = ciclo === 'anual' ? def.anual : def.mensual
 
   const [listo, setListo] = useState(false)
+  const [nombre, setNombre] = useState('')
+  const [dni, setDni] = useState('')
   const [procesando, setProcesando] = useState(false)
 
   useEffect(() => {
@@ -51,9 +66,46 @@ export function PagarConTarjeta() {
     )
   }
 
+  async function pagar() {
+    if (!nombre.trim()) return toast('Poné el nombre del titular', 'aviso')
+    if (dni.trim().length < 6) return toast('Poné el DNI del titular', 'aviso')
+
+    setProcesando(true)
+    try {
+      const token = await createCardToken({
+        cardholderName: nombre.trim(),
+        identificationType: 'DNI',
+        identificationNumber: dni.trim(),
+      })
+      if (!token?.id) throw new Error('No pudimos leer los datos de la tarjeta')
+
+      const res = await fetch('/api/mercadopago/guardar-tarjeta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token.id, plan, ciclo }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detalle || data.error || 'error')
+      await hidratarPerfil().catch(() => {})
+      toast(`¡Listo! Ahora estás en el plan ${def.nombre}`)
+      nav.reset('tabs')
+    } catch (err) {
+      const detalle = err instanceof Error ? err.message : undefined
+      toast(detalle ? `No pudimos procesar el pago: ${detalle}` : 'No pudimos procesar el pago. Probá de nuevo.', {
+        tono: 'aviso',
+      })
+    } finally {
+      setProcesando(false)
+    }
+  }
+
   return (
     <Screen pad="none">
-      <TopBar title={`Pagar plan ${def.nombre}`} subtitle={`${money(monto)} / ${ciclo === 'anual' ? 'año' : 'mes'}`} onBack={nav.pop} />
+      <TopBar
+        title={`Pagar plan ${def.nombre}`}
+        subtitle={`${money(monto)} / ${ciclo === 'anual' ? 'año' : 'mes'}`}
+        onBack={nav.pop}
+      />
 
       <p className="mb-4 text-[12.5px] leading-relaxed text-ink-faint">
         Cargá tu tarjeta una sola vez — el próximo cobro se hace solo cada {ciclo === 'anual' ? 'año' : 'mes'}, sin
@@ -61,46 +113,44 @@ export function PagarConTarjeta() {
       </p>
 
       {listo && (
-        <CardPayment
-          initialization={{ amount: monto }}
-          locale="es-AR"
-          onSubmit={async (datos) => {
-            setProcesando(true)
-            try {
-              const res = await fetch('/api/mercadopago/guardar-tarjeta', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  token: datos.token,
-                  paymentMethodId: datos.payment_method_id,
-                  issuerId: datos.issuer_id,
-                  identificacion: datos.payer?.identification,
-                  plan,
-                  ciclo,
-                }),
-              })
-              const data = await res.json()
-              if (!res.ok) throw new Error(data.detalle || data.error || 'error')
-              await hidratarPerfil().catch(() => {})
-              toast(`¡Listo! Ahora estás en el plan ${def.nombre}`)
-              nav.reset('tabs')
-            } catch (err) {
-              const detalle = err instanceof Error ? err.message : undefined
-              toast(detalle ? `No pudimos procesar el pago: ${detalle}` : 'No pudimos procesar el pago. Probá de nuevo.', {
-                tono: 'aviso',
-              })
-            } finally {
-              setProcesando(false)
-            }
-          }}
-          onError={() => {
-            toast('Revisá los datos de la tarjeta e intentá de nuevo.', { tono: 'aviso' })
-          }}
-        />
-      )}
+        <div className="space-y-4">
+          <Field label="Número de tarjeta">
+            <div className="h-12 rounded-input border border-line-strong bg-surface-2 px-3.5">
+              <CardNumber placeholder="1234 1234 1234 1234" style={ESTILO_CAMPO} />
+            </div>
+          </Field>
 
-      {procesando && (
-        <p className="mt-3 text-center text-[13px] text-ink-faint">Procesando el pago…</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Vencimiento">
+              <div className="h-12 rounded-input border border-line-strong bg-surface-2 px-3.5">
+                <ExpirationDate mode="short" placeholder="MM/AA" style={ESTILO_CAMPO} />
+              </div>
+            </Field>
+            <Field label="Código de seguridad">
+              <div className="h-12 rounded-input border border-line-strong bg-surface-2 px-3.5">
+                <SecurityCode placeholder="123" style={ESTILO_CAMPO} />
+              </div>
+            </Field>
+          </div>
+
+          <Input
+            label="Nombre del titular (como figura en la tarjeta)"
+            placeholder="Ej. Juan Pérez"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+          />
+          <Input
+            label="DNI del titular"
+            placeholder="Ej. 30123456"
+            inputMode="numeric"
+            value={dni}
+            onChange={(e) => setDni(e.target.value.replace(/\D/g, ''))}
+          />
+
+          <Button full size="lg" loading={procesando} onClick={pagar}>
+            Pagar {money(monto)}
+          </Button>
+        </div>
       )}
     </Screen>
   )
