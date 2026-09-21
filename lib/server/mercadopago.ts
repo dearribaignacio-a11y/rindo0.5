@@ -1,6 +1,7 @@
 import { MercadoPagoConfig, Payment } from 'mercadopago'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { planADB } from '@/lib/supabase/types'
+import type { ProfileRow } from '@/lib/supabase/types'
 import { PLANES, montoPorMeses } from '@/lib/plans'
 import type { PlanId } from '@/lib/types'
 
@@ -25,6 +26,12 @@ function cliente(): MercadoPagoConfig | null {
  * probamos un montón de veces y siempre anduvo bien), y cada mes el usuario
  * vuelve a esta misma pantalla a pagar de nuevo — no es 100% automático,
  * pero es confiable.
+ *
+ * Cuando `diferencia` viene seteada, es un cambio entre dos planes pagos ya
+ * al día a mitad de período (ver `diferenciaProrrateada` en lib/plans.ts):
+ * se cobra ese monto fijo en vez de calcularlo por `meses`, y no se toca
+ * `proximo_cobro` — el ciclo de pago sigue siendo el mismo, sólo cambió a
+ * qué plan corresponde.
  */
 export async function cobrarPlan(opts: {
   userId: string
@@ -32,20 +39,25 @@ export async function cobrarPlan(opts: {
   token: string
   identificacion?: { type?: string; number?: string }
   plan: Extract<PlanId, 'comercial' | 'comercial-pro'>
-  meses: number
+  meses?: number
+  diferencia?: number
 }): Promise<void> {
   const mp = cliente()
   if (!mp) throw new Error('Falta MERCADOPAGO_ACCESS_TOKEN en el servidor')
 
   const plan = PLANES[opts.plan]
-  const monto = montoPorMeses(opts.plan, opts.meses)
+  const esDiferencia = typeof opts.diferencia === 'number'
+  const meses = opts.meses ?? 1
+  const monto = esDiferencia ? (opts.diferencia as number) : montoPorMeses(opts.plan, meses)
 
   const payment = new Payment(mp)
   const pago = await payment.create({
     body: {
       transaction_amount: monto,
       token: opts.token,
-      description: `Rindo — Plan ${plan.nombre} (${opts.meses} ${opts.meses === 1 ? 'mes' : 'meses'})`,
+      description: esDiferencia
+        ? `Rindo — Cambio a plan ${plan.nombre} (diferencia prorrateada)`
+        : `Rindo — Plan ${plan.nombre} (${meses} ${meses === 1 ? 'mes' : 'meses'})`,
       installments: 1,
       external_reference: opts.userId,
       payer: { email: opts.email, identification: opts.identificacion },
@@ -64,19 +76,19 @@ export async function cobrarPlan(opts: {
     throw new Error(`El pago no se aprobó: ${pago.status_detail ?? pago.status}`)
   }
 
-  const proximoCobro = new Date()
-  proximoCobro.setMonth(proximoCobro.getMonth() + opts.meses)
-
   const admin = createAdminClient()
-  const { error } = await admin
-    .from('profiles')
-    .update({
-      plan: planADB(opts.plan),
-      suscripcion_activa: true,
-      proximo_cobro: proximoCobro.toISOString().slice(0, 10),
-      mp_ultimo_pago_id: String(pago.id ?? ''),
-    })
-    .eq('id', opts.userId)
+  const cambios: Partial<ProfileRow> = {
+    plan: planADB(opts.plan),
+    suscripcion_activa: true,
+    mp_ultimo_pago_id: String(pago.id ?? ''),
+  }
+  if (!esDiferencia) {
+    const proximoCobro = new Date()
+    proximoCobro.setMonth(proximoCobro.getMonth() + meses)
+    cambios.proximo_cobro = proximoCobro.toISOString().slice(0, 10)
+  }
+
+  const { error } = await admin.from('profiles').update(cambios).eq('id', opts.userId)
   if (error) throw error
 }
 

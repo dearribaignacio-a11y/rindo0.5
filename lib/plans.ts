@@ -124,3 +124,22 @@ export function montoPorMeses(plan: PlanId, meses: number): number {
   if (meses >= 12) return def.anual
   return def.mensual * meses
 }
+
+/** Diferencia a cobrar al cambiar de un plan pago a otro a mitad de período
+ *  (ej. Comercial → Comercial Pro con días ya pagados de Comercial). Se
+ *  prorratea por día: días que quedan hasta `proximoCobro` × la diferencia
+ *  entre el precio diario de cada plan (mensual / 30). Si el plan nuevo es
+ *  más barato (o igual) el resultado da 0 — nunca se devuelve plata, sólo se
+ *  cobra la diferencia cuando corresponde subir de plan. */
+export function diferenciaProrrateada(
+  planActual: PlanId,
+  planNuevo: PlanId,
+  proximoCobro: string,
+): number {
+  const hoy = new Date()
+  const fin = new Date(`${proximoCobro}T00:00:00`)
+  const diasRestantes = Math.max(0, Math.ceil((fin.getTime() - hoy.getTime()) / 86_400_000))
+  const diarioActual = PLANES[planActual].mensual / 30
+  const diarioNuevo = PLANES[planNuevo].mensual / 30
+  return Math.max(0, Math.round(diasRestantes * (diarioNuevo - diarioActual)))
+}

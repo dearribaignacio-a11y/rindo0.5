@@ -55,6 +55,8 @@ export interface PerfilRemoto {
   negocio?: string
   plan: PlanId
   suscripcionActiva: boolean
+  /** ISO corto: hasta cuándo está pagado el plan actual (planes pagos). */
+  proximoCobro?: string
   email: string
 }
 
@@ -72,6 +74,7 @@ export async function fetchPerfilRemoto(): Promise<PerfilRemoto | null> {
     negocio: data.nombre_negocio ?? undefined,
     plan: planDesdeDB(data.plan),
     suscripcionActiva: data.suscripcion_activa,
+    proximoCobro: data.proximo_cobro ?? undefined,
     email: user.email ?? '',
   }
 }

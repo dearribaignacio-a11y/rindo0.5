@@ -53,16 +53,19 @@ const ESTILO_CAMPO = {
 export function PagarConTarjeta() {
   const nav = useNav()
   const toast = useToast()
-  const params = nav.actual.params as { plan?: PlanId } | undefined
+  const params = nav.actual.params as { plan?: PlanId; diferencia?: number } | undefined
   const plan = params?.plan && params.plan !== 'hogar' ? params.plan : 'comercial'
   const def = PLANES[plan]
+  // Si viene `diferencia`, es un cambio entre dos planes pagos a mitad de
+  // período: se cobra ese monto fijo (ya prorrateado) en vez de elegir meses.
+  const esDiferencia = typeof params?.diferencia === 'number'
 
   const [listo, setListo] = useState(false)
   const [nombre, setNombre] = useState('')
   const [dni, setDni] = useState('')
   const [meses, setMeses] = useState<'1' | '3' | '6' | '12'>('1')
   const [procesando, setProcesando] = useState(false)
-  const monto = montoPorMeses(plan, Number(meses))
+  const monto = esDiferencia ? (params!.diferencia as number) : montoPorMeses(plan, Number(meses))
 
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY
@@ -105,16 +108,18 @@ export function PagarConTarjeta() {
           token: token.id,
           identificacion: { type: 'DNI', number: dni.trim() },
           plan,
-          meses: Number(meses),
+          ...(esDiferencia ? { diferencia: params!.diferencia } : { meses: Number(meses) }),
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detalle || data.error || 'error')
       await hidratarPerfil().catch(() => {})
       toast(
-        meses === '1'
+        esDiferencia
           ? `¡Listo! Ahora estás en el plan ${def.nombre}`
-          : `¡Listo! Plan ${def.nombre} pagado por ${meses} meses`,
+          : meses === '1'
+            ? `¡Listo! Ahora estás en el plan ${def.nombre}`
+            : `¡Listo! Plan ${def.nombre} pagado por ${meses} meses`,
       )
       nav.reset('tabs')
     } catch (err) {
@@ -129,26 +134,32 @@ export function PagarConTarjeta() {
 
   return (
     <Screen pad="none">
-      <TopBar title={`Pagar plan ${def.nombre}`} subtitle={money(def.mensual) + ' / mes'} onBack={nav.pop} />
+      <TopBar
+        title={esDiferencia ? `Cambiar a ${def.nombre}` : `Pagar plan ${def.nombre}`}
+        subtitle={esDiferencia ? 'Diferencia por lo que ya pagaste' : money(def.mensual) + ' / mes'}
+        onBack={nav.pop}
+      />
 
       <p className="mb-4 text-[12.5px] leading-relaxed text-ink-faint">
-        El número de tarjeta nunca pasa por nuestros servidores. Como no queda guardada, vas a
-        tener que volver a cargarla cuando toque pagar de nuevo — para no hacerlo tan seguido,
-        podés pagar varios meses de una vez.
+        {esDiferencia
+          ? 'Ya pagaste días del plan anterior, así que sólo se cobra la diferencia por lo que queda del período — no todo de nuevo. El número de tarjeta nunca pasa por nuestros servidores.'
+          : 'El número de tarjeta nunca pasa por nuestros servidores. Como no queda guardada, vas a tener que volver a cargarla cuando toque pagar de nuevo — para no hacerlo tan seguido, podés pagar varios meses de una vez.'}
       </p>
 
       {listo && (
         <div className="space-y-4">
-          <Field label="¿Cuántos meses querés pagar?">
-            <Segmented
-              layoutId="meses-pago"
-              value={meses}
-              onChange={setMeses}
-              opciones={[...OPCIONES_MESES]}
-              semantica="radio"
-              etiqueta="Cantidad de meses a pagar"
-            />
-          </Field>
+          {!esDiferencia && (
+            <Field label="¿Cuántos meses querés pagar?">
+              <Segmented
+                layoutId="meses-pago"
+                value={meses}
+                onChange={setMeses}
+                opciones={[...OPCIONES_MESES]}
+                semantica="radio"
+                etiqueta="Cantidad de meses a pagar"
+              />
+            </Field>
+          )}
 
           <Field label="Número de tarjeta">
             <div className="h-[46px] overflow-hidden rounded-input border border-line-strong bg-surface-2">
@@ -183,12 +194,14 @@ export function PagarConTarjeta() {
             onChange={(e) => setDni(e.target.value.replace(/\D/g, ''))}
           />
 
-          <p className="text-center text-[12.5px] text-ink-faint">
-            {meses === '1'
-              ? `Válido por 1 mes — próximo pago en 1 mes.`
-              : `Válido por ${meses} meses — próximo pago recién dentro de ${meses} meses.`}
-            {meses === '12' && ' Precio anual con 2 meses gratis.'}
-          </p>
+          {!esDiferencia && (
+            <p className="text-center text-[12.5px] text-ink-faint">
+              {meses === '1'
+                ? `Válido por 1 mes — próximo pago en 1 mes.`
+                : `Válido por ${meses} meses — próximo pago recién dentro de ${meses} meses.`}
+              {meses === '12' && ' Precio anual con 2 meses gratis.'}
+            </p>
+          )}
 
           <Button full size="lg" loading={procesando} onClick={pagar}>
             Pagar {money(monto)}

@@ -9,16 +9,19 @@ export const dynamic = 'force-dynamic'
 
 /**
  * Recibe el token de tarjeta que generaron los Secure Fields en el
- * navegador (`@mercadopago/sdk-react`) y cobra el plan elegido por la
- * cantidad de meses que haya pedido el usuario. Si se aprueba, activa el
- * plan por esos meses; si no, no toca nada.
+ * navegador (`@mercadopago/sdk-react`) y cobra el plan elegido — ya sea por
+ * la cantidad de meses que pidió el usuario, o por una `diferencia` fija
+ * cuando es un cambio entre dos planes pagos a mitad de período (ver
+ * `diferenciaProrrateada` en lib/plans.ts). Si se aprueba, activa el plan;
+ * si no, no toca nada.
  */
 export async function POST(req: Request) {
-  const { token, identificacion, plan, meses } = (await req.json()) as {
+  const { token, identificacion, plan, meses, diferencia } = (await req.json()) as {
     token?: string
     identificacion?: { type?: string; number?: string }
     plan?: PlanId
     meses?: number
+    diferencia?: number
   }
 
   if (!token) {
@@ -27,9 +30,17 @@ export async function POST(req: Request) {
   if (!plan || !esComercial(plan)) {
     return NextResponse.json({ error: 'Plan inválido' }, { status: 400 })
   }
-  const mesesValidos = [1, 3, 6, 12]
-  if (!meses || !mesesValidos.includes(meses)) {
-    return NextResponse.json({ error: 'Cantidad de meses inválida' }, { status: 400 })
+
+  const esDiferencia = typeof diferencia === 'number'
+  if (esDiferencia) {
+    if (!(diferencia > 0)) {
+      return NextResponse.json({ error: 'Diferencia inválida' }, { status: 400 })
+    }
+  } else {
+    const mesesValidos = [1, 3, 6, 12]
+    if (!meses || !mesesValidos.includes(meses)) {
+      return NextResponse.json({ error: 'Cantidad de meses inválida' }, { status: 400 })
+    }
   }
 
   const supabase = await createClient()
@@ -48,7 +59,7 @@ export async function POST(req: Request) {
       token,
       identificacion,
       plan,
-      meses,
+      ...(esDiferencia ? { diferencia } : { meses }),
     })
     return NextResponse.json({ ok: true })
   } catch (err) {

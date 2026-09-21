@@ -26,10 +26,14 @@ export interface Perfil {
   nombre: string
   email: string
   plan: PlanId
-  /** false = plan pago sin el cobro mensual al día (la tarjeta guardada
-   *  falló o todavía no se cargó ninguna); la app muestra la pantalla de
-   *  reactivar en vez del contenido normal. El plan Hogar no la usa nunca. */
+  /** false = plan pago sin el cobro al día (venció el período pagado y
+   *  todavía no se pagó de nuevo); la app muestra la pantalla de pagar en
+   *  vez del contenido normal. El plan Hogar no la usa nunca. */
   suscripcionActiva: boolean
+  /** ISO corto (yyyy-mm-dd): hasta cuándo está pagado el plan actual. Sólo
+   *  tiene sentido en planes pagos — se usa para prorratear un cambio de
+   *  plan a mitad de período (ver `diferenciaProrrateada` en lib/plans.ts). */
+  proximoCobro?: string
   moneda: string
   /* Hogar */
   integrantes?: number

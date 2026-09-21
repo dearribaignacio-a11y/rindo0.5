@@ -155,12 +155,18 @@ export async function hidratarPerfil() {
   setDB((db) => ({
     ...db,
     perfil: db.perfil
-      ? { ...db.perfil, plan: remoto.plan, suscripcionActiva: remoto.suscripcionActiva }
+      ? {
+          ...db.perfil,
+          plan: remoto.plan,
+          suscripcionActiva: remoto.suscripcionActiva,
+          proximoCobro: remoto.proximoCobro,
+        }
       : {
           nombre: remoto.nombre,
           email: remoto.email,
           plan: remoto.plan,
           suscripcionActiva: remoto.suscripcionActiva,
+          proximoCobro: remoto.proximoCobro,
           moneda: 'ARS',
           negocio: remoto.negocio,
         },

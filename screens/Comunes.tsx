@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/Bits'
 import { Select } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
 import { useNav } from '@/components/nav'
-import { ORDEN_PLANES, PLANES, esComercial } from '@/lib/plans'
+import { ORDEN_PLANES, PLANES, esComercial, diferenciaProrrateada } from '@/lib/plans'
 import { TEMAS } from '@/lib/temas'
 import { aplicarTema, cambiarPlan, updatePerfil } from '@/lib/storage'
 import { createClient } from '@/lib/supabase/client'
@@ -404,6 +404,31 @@ export function PantallaPlanes({ db }: { db: DB }) {
       toast('No encontramos tu perfil en este navegador. Cerrá sesión y volvé a entrar.', {
         tono: 'aviso',
       })
+      return
+    }
+
+    // Cambiar entre dos planes pagos ya al día (Comercial ↔ Comercial Pro) no
+    // arranca un cobro nuevo desde cero: se prorratea lo que ya está pagado y
+    // sólo se cobra la diferencia (o nada, si el plan nuevo es igual o más
+    // barato). Ver `diferenciaProrrateada` en lib/plans.ts.
+    if (esComercial(actual) && esComercial(pid) && db.perfil.suscripcionActiva && db.perfil.proximoCobro) {
+      const diferencia = diferenciaProrrateada(actual, pid, db.perfil.proximoCobro)
+      if (diferencia <= 0) {
+        setCambiando(pid)
+        setTimeout(async () => {
+          try {
+            await cambiarPlan(pid)
+            toast(`Ahora estás en el plan ${PLANES[pid].nombre}`)
+            nav.reset('tabs')
+          } catch {
+            toast('No pudimos cambiar de plan. Probá de nuevo.', { tono: 'aviso' })
+          } finally {
+            setCambiando(null)
+          }
+        }, 700)
+        return
+      }
+      nav.push('pagar-tarjeta', { plan: pid, diferencia })
       return
     }
 
