@@ -112,3 +112,15 @@ export function cuentaBloqueada(perfil: Perfil | null): boolean {
   if (!perfil) return false
   return esComercial(perfil.plan) && !perfil.suscripcionActiva
 }
+
+/** Precio total por pagar `meses` de un plan de una sola vez. 12 meses usa
+ *  el precio anual ya con descuento ("2 meses gratis"); cualquier otra
+ *  cantidad es lineal (precio mensual × meses) — pagar varios meses juntos
+ *  es sólo para evitar tener que volver a cargar la tarjeta seguido, no
+ *  hace falta un descuento propio para eso. Sin dependencias de servidor:
+ *  la usan tanto la pantalla de pago como `lib/server/mercadopago.ts`. */
+export function montoPorMeses(plan: PlanId, meses: number): number {
+  const def = PLANES[plan]
+  if (meses >= 12) return def.anual
+  return def.mensual * meses
+}

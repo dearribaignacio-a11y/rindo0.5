@@ -6,12 +6,20 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Field } from '@/components/ui/Field'
 import { Screen, TopBar } from '@/components/ui/Screen'
+import { Segmented } from '@/components/ui/Segmented'
 import { useToast } from '@/components/ui/Toast'
 import { useNav } from '@/components/nav'
-import { PLANES } from '@/lib/plans'
+import { PLANES, montoPorMeses } from '@/lib/plans'
 import { hidratarPerfil } from '@/lib/storage'
 import { money } from '@/lib/format'
 import type { PlanId } from '@/lib/types'
+
+const OPCIONES_MESES = [
+  { id: '1', label: '1 mes' },
+  { id: '3', label: '3 meses' },
+  { id: '6', label: '6 meses' },
+  { id: '12', label: '12 meses' },
+] as const
 
 let inicializado = false
 
@@ -45,16 +53,16 @@ const ESTILO_CAMPO = {
 export function PagarConTarjeta() {
   const nav = useNav()
   const toast = useToast()
-  const params = nav.actual.params as { plan?: PlanId; ciclo?: 'mensual' | 'anual' } | undefined
+  const params = nav.actual.params as { plan?: PlanId } | undefined
   const plan = params?.plan && params.plan !== 'hogar' ? params.plan : 'comercial'
-  const ciclo = params?.ciclo === 'anual' ? 'anual' : 'mensual'
   const def = PLANES[plan]
-  const monto = ciclo === 'anual' ? def.anual : def.mensual
 
   const [listo, setListo] = useState(false)
   const [nombre, setNombre] = useState('')
   const [dni, setDni] = useState('')
+  const [meses, setMeses] = useState<'1' | '3' | '6' | '12'>('1')
   const [procesando, setProcesando] = useState(false)
+  const monto = montoPorMeses(plan, Number(meses))
 
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY
@@ -97,13 +105,17 @@ export function PagarConTarjeta() {
           token: token.id,
           identificacion: { type: 'DNI', number: dni.trim() },
           plan,
-          ciclo,
+          meses: Number(meses),
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detalle || data.error || 'error')
       await hidratarPerfil().catch(() => {})
-      toast(`¡Listo! Ahora estás en el plan ${def.nombre}`)
+      toast(
+        meses === '1'
+          ? `¡Listo! Ahora estás en el plan ${def.nombre}`
+          : `¡Listo! Plan ${def.nombre} pagado por ${meses} meses`,
+      )
       nav.reset('tabs')
     } catch (err) {
       const detalle = err instanceof Error ? err.message : undefined
@@ -117,19 +129,27 @@ export function PagarConTarjeta() {
 
   return (
     <Screen pad="none">
-      <TopBar
-        title={`Pagar plan ${def.nombre}`}
-        subtitle={`${money(monto)} / ${ciclo === 'anual' ? 'año' : 'mes'}`}
-        onBack={nav.pop}
-      />
+      <TopBar title={`Pagar plan ${def.nombre}`} subtitle={money(def.mensual) + ' / mes'} onBack={nav.pop} />
 
       <p className="mb-4 text-[12.5px] leading-relaxed text-ink-faint">
-        El número de tarjeta nunca pasa por nuestros servidores. Vas a tener que volver a cargarla
-        cada vez que toque pagar (cada {ciclo === 'anual' ? 'año' : 'mes'}) — te vamos a avisar acá en la app.
+        El número de tarjeta nunca pasa por nuestros servidores. Como no queda guardada, vas a
+        tener que volver a cargarla cuando toque pagar de nuevo — para no hacerlo tan seguido,
+        podés pagar varios meses de una vez.
       </p>
 
       {listo && (
         <div className="space-y-4">
+          <Field label="¿Cuántos meses querés pagar?">
+            <Segmented
+              layoutId="meses-pago"
+              value={meses}
+              onChange={setMeses}
+              opciones={[...OPCIONES_MESES]}
+              semantica="radio"
+              etiqueta="Cantidad de meses a pagar"
+            />
+          </Field>
+
           <Field label="Número de tarjeta">
             <div className="h-[46px] overflow-hidden rounded-input border border-line-strong bg-surface-2">
               <CardNumber placeholder="1234 1234 1234 1234" style={ESTILO_CAMPO} />
@@ -162,6 +182,13 @@ export function PagarConTarjeta() {
             value={dni}
             onChange={(e) => setDni(e.target.value.replace(/\D/g, ''))}
           />
+
+          <p className="text-center text-[12.5px] text-ink-faint">
+            {meses === '1'
+              ? `Válido por 1 mes — próximo pago en 1 mes.`
+              : `Válido por ${meses} meses — próximo pago recién dentro de ${meses} meses.`}
+            {meses === '12' && ' Precio anual con 2 meses gratis.'}
+          </p>
 
           <Button full size="lg" loading={procesando} onClick={pagar}>
             Pagar {money(monto)}

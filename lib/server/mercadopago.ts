@@ -1,7 +1,7 @@
 import { MercadoPagoConfig, Payment } from 'mercadopago'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { planADB } from '@/lib/supabase/types'
-import { PLANES } from '@/lib/plans'
+import { PLANES, montoPorMeses } from '@/lib/plans'
 import type { PlanId } from '@/lib/types'
 
 /** SOLO se importa desde `app/api/mercadopago/**` (código de servidor). El
@@ -32,20 +32,20 @@ export async function cobrarPlan(opts: {
   token: string
   identificacion?: { type?: string; number?: string }
   plan: Extract<PlanId, 'comercial' | 'comercial-pro'>
-  ciclo: 'mensual' | 'anual'
+  meses: number
 }): Promise<void> {
   const mp = cliente()
   if (!mp) throw new Error('Falta MERCADOPAGO_ACCESS_TOKEN en el servidor')
 
   const plan = PLANES[opts.plan]
-  const monto = opts.ciclo === 'anual' ? plan.anual : plan.mensual
+  const monto = montoPorMeses(opts.plan, opts.meses)
 
   const payment = new Payment(mp)
   const pago = await payment.create({
     body: {
       transaction_amount: monto,
       token: opts.token,
-      description: `Rindo — Plan ${plan.nombre} (${opts.ciclo === 'anual' ? 'anual' : 'mensual'})`,
+      description: `Rindo — Plan ${plan.nombre} (${opts.meses} ${opts.meses === 1 ? 'mes' : 'meses'})`,
       installments: 1,
       external_reference: opts.userId,
       payer: { email: opts.email, identification: opts.identificacion },
@@ -65,7 +65,7 @@ export async function cobrarPlan(opts: {
   }
 
   const proximoCobro = new Date()
-  proximoCobro.setMonth(proximoCobro.getMonth() + (opts.ciclo === 'anual' ? 12 : 1))
+  proximoCobro.setMonth(proximoCobro.getMonth() + opts.meses)
 
   const admin = createAdminClient()
   const { error } = await admin

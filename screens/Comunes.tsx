@@ -407,10 +407,10 @@ export function PantallaPlanes({ db }: { db: DB }) {
       return
     }
 
-    // Un plan pago necesita cargar la tarjeta primero (y cobrar el primer
-    // mes) — eso pasa en su propia pantalla, no acá.
+    // Un plan pago necesita cargar la tarjeta primero (y cobrar) — eso pasa
+    // en su propia pantalla, donde también se elige cuántos meses pagar.
     if (esComercial(pid)) {
-      nav.push('pagar-tarjeta', { plan: pid, ciclo })
+      nav.push('pagar-tarjeta', { plan: pid })
       return
     }
 

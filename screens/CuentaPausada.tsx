@@ -96,7 +96,7 @@ function AvisoBloqueo({ perfil, onCerrarSesion }: { perfil: Perfil; onCerrarSesi
           full
           size="lg"
           className="mt-6 max-w-sm"
-          onClick={() => nav.push('pagar-tarjeta', { plan: perfil.plan, ciclo: 'mensual' })}
+          onClick={() => nav.push('pagar-tarjeta', { plan: perfil.plan })}
         >
           Pagar ahora
         </Button>
