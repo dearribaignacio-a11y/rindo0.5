@@ -137,7 +137,7 @@ export function PagarConTarjeta() {
             </Field>
             <Field label="Código de seguridad">
               <div className="h-[46px] overflow-hidden rounded-input border border-line-strong bg-surface-2">
-                <SecurityCode placeholder="123" style={ESTILO_CAMPO} />
+                <SecurityCode placeholder="123" mode="mandatory" style={ESTILO_CAMPO} />
               </div>
             </Field>
           </div>
