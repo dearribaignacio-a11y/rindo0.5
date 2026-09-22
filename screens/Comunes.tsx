@@ -176,30 +176,23 @@ export function PantallaPassword() {
 
     setError(undefined)
     setGuardando(true)
-    const supabase = createClient()
 
-    // No hay una API directa de "verificar contraseña actual": se confirma
-    // volviendo a iniciar sesión con ella antes de aplicar el cambio.
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user?.email) {
-      setGuardando(false)
-      setError('No pudimos identificar tu cuenta. Volvé a iniciar sesión.')
-      return
-    }
-
-    const { error: loginError } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password: actual,
+    // Verificar la contraseña actual se hace en el servidor, con un cliente
+    // aparte que no toca la sesión real — hacerlo con `signInWithPassword`
+    // sobre el mismo cliente de la sesión activa la reemplazaba por una
+    // sesión nueva y a veces terminaba deslogueando a mitad de camino.
+    const resVerificar = await fetch('/api/auth/verificar-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: actual }),
     })
-    if (loginError) {
+    if (!resVerificar.ok) {
       setGuardando(false)
       setError('La contraseña actual no es correcta')
       return
     }
 
+    const supabase = createClient()
     const { error: updateError } = await supabase.auth.updateUser({ password: nueva })
     setGuardando(false)
 
