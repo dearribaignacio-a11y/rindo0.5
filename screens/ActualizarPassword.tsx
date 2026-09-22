@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Lock } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -13,7 +12,6 @@ import { errorPassword, passwordValida } from '@/lib/validacion'
 /** Paso final de "olvidé mi contraseña": ya hay una sesión temporal abierta
  *  por el link de recuperación, así que sólo hace falta pedir la nueva. */
 export function ActualizarPassword() {
-  const router = useRouter()
   const [password, setPassword] = useState('')
   const [password2, setPassword2] = useState('')
   const [error, setError] = useState<string>()
@@ -36,8 +34,14 @@ export function ActualizarPassword() {
       return
     }
 
-    router.push('/dashboard')
-    router.refresh()
+    // Navegación dura (no router.push): el cliente de Supabase escribe la
+    // cookie de sesión nueva de forma asíncrona (en su propio listener de
+    // onAuthStateChange), no dentro de esta misma promesa — una navegación
+    // por el router de Next puede llegar a /dashboard antes de que esa
+    // cookie se haya escrito, y el middleware, viendo la sesión vieja de
+    // recuperación, te manda de vuelta al login. Con navegación dura el
+    // servidor recibe la cookie ya escrita.
+    window.location.href = '/dashboard'
   }
 
   return (
