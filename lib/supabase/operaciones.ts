@@ -9,10 +9,12 @@ function productoDesdeRow(row: ProductoRow): Producto {
     id: row.id,
     nombre: row.nombre,
     categoria: row.categoria,
+    subcategoria: row.subcategoria ?? undefined,
     costo: Number(row.costo),
     precio: Number(row.precio),
     stock: Number(row.stock),
     stockMin: Number(row.stock_min),
+    codigo: row.codigo ?? undefined,
   }
 }
 
@@ -65,10 +67,12 @@ export async function crearProducto(datos: Omit<Producto, 'id'>): Promise<Produc
       user_id: user.id,
       nombre: datos.nombre,
       categoria: datos.categoria,
+      subcategoria: datos.subcategoria || null,
       costo: datos.costo,
       precio: datos.precio,
       stock: datos.stock,
       stock_min: datos.stockMin,
+      codigo: datos.codigo || null,
     })
     .select()
     .single()
@@ -81,10 +85,12 @@ export async function actualizarProducto(id: string, patch: Partial<Producto>): 
   const cambios: Partial<ProductoRow> = {}
   if (patch.nombre !== undefined) cambios.nombre = patch.nombre
   if (patch.categoria !== undefined) cambios.categoria = patch.categoria
+  if (patch.subcategoria !== undefined) cambios.subcategoria = patch.subcategoria || null
   if (patch.costo !== undefined) cambios.costo = patch.costo
   if (patch.precio !== undefined) cambios.precio = patch.precio
   if (patch.stock !== undefined) cambios.stock = patch.stock
   if (patch.stockMin !== undefined) cambios.stock_min = patch.stockMin
+  if (patch.codigo !== undefined) cambios.codigo = patch.codigo || null
 
   const { data, error } = await supabase
     .from('productos')
@@ -113,10 +119,12 @@ export async function crearProductosEnLote(items: Omit<Producto, 'id'>[]): Promi
         user_id: user.id,
         nombre: p.nombre,
         categoria: p.categoria,
+        subcategoria: p.subcategoria || null,
         costo: p.costo,
         precio: p.precio,
         stock: p.stock,
         stock_min: p.stockMin,
+        codigo: p.codigo || null,
       })),
     )
     .select()

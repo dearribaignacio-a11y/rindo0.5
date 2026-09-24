@@ -88,12 +88,21 @@ export interface Invitacion {
 export interface Producto {
   id: string
   nombre: string
+  /** Categoría grande (ej. "Bebidas", "Almacén"). */
   categoria: string
+  /** Subdivisión libre dentro de `categoria` (ej. "Bebidas blancas"), que
+   *  arma cada comerciante — no es una lista fija de Rindo. */
+  subcategoria?: string
   costo: number
   precio: number
   stock: number
   /** Umbral por debajo del cual el producto entra en "reponer". */
   stockMin: number
+  /** Número corto (hasta 3 cifras) que Rindo asigna solo al crear el
+   *  producto, para venderlo más rápido y para que el asistente lo
+   *  identifique sin ambigüedad en vez de adivinar por nombre. Único por
+   *  cuenta, no global — no se vuelve a editar a mano. */
+  codigo?: string
 }
 
 export interface ItemVenta {

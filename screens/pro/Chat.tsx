@@ -56,6 +56,7 @@ export function ProChat({ db }: { db: DB }) {
       productos: db.productos.map((p) => ({
         id: p.id,
         nombre: p.nombre,
+        codigo: p.codigo,
         precio: p.precio,
         stock: p.stock,
       })),

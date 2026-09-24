@@ -21,7 +21,11 @@ export function ComercialProductos({ db }: { db: DB }) {
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
-    const base = q ? db.productos.filter((p) => p.nombre.toLowerCase().includes(q)) : db.productos
+    const base = q
+      ? db.productos.filter(
+          (p) => p.nombre.toLowerCase().includes(q) || p.codigo?.toLowerCase() === q,
+        )
+      : db.productos
     return [...base].sort((a, b) => a.nombre.localeCompare(b.nombre))
   }, [db.productos, busqueda])
 
@@ -35,7 +39,7 @@ export function ComercialProductos({ db }: { db: DB }) {
         {db.productos.length > 0 && (
           <Input
             leading={<Search className="size-[17px]" strokeWidth={1.9} />}
-            placeholder="Buscar producto…"
+            placeholder="Buscar por nombre o código…"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             className="mb-4"
@@ -61,9 +65,17 @@ export function ComercialProductos({ db }: { db: DB }) {
                 >
                   <IconChip icon={iconoRubro(p.categoria)} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[14.5px] font-medium text-ink">{p.nombre}</p>
+                    <p className="truncate text-[14.5px] font-medium text-ink">
+                      {p.nombre}
+                      {p.codigo && (
+                        <span className="tabular ml-1.5 text-[11.5px] font-normal text-ink-faint">
+                          #{p.codigo}
+                        </span>
+                      )}
+                    </p>
                     <p className="tabular truncate text-[12.5px] text-ink-faint">
-                      {p.categoria} · stock {p.stock}
+                      {p.categoria}
+                      {p.subcategoria ? ` › ${p.subcategoria}` : ''} · stock {p.stock}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">

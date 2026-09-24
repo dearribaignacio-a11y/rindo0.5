@@ -22,7 +22,7 @@ export interface Operacion {
 
 export interface ContextoAsistente {
   negocio?: string
-  productos?: { id: string; nombre: string; precio: number; stock: number }[]
+  productos?: { id: string; nombre: string; codigo?: string; precio: number; stock: number }[]
   ventasHoy?: number
   ticketsHoy?: number
 }

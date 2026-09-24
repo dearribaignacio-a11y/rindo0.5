@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
 
 interface Contexto {
   negocio?: string
-  productos?: { id: string; nombre: string; precio: number; stock: number }[]
+  productos?: { id: string; nombre: string; codigo?: string; precio: number; stock: number }[]
   ventasHoy?: number
   ticketsHoy?: number
 }
@@ -79,6 +79,7 @@ Devolvés SIEMPRE un único objeto JSON, sin texto alrededor, con esta forma:
 Usás "confirmacion" solamente cuando el usuario pide registrar algo concreto (una venta, una reposición, un gasto): ahí resumís lo entendido en líneas cortas para que lo confirme antes de impactar los datos. Para preguntas de consulta, "confirmacion" va en null.
 
 Cuando la operación es una venta de productos del catálogo, además de "confirmacion" completás "operacion" con el "id" EXACTO de cada producto tal como figura en el contexto y la cantidad como número entero. No inventes ids: si no encontrás el producto en el contexto, dejá "operacion" en null y pedí el nombre en "texto".
+Algunos productos del contexto traen "codigo", un código corto que el comerciante les asignó (ej. "20" para el Fernet). Si el mensaje menciona un número o código corto (típico al dictar una venta rápido: "20, uno" = un Fernet), priorizá matchear por "codigo" exacto antes que por nombre — es una señal más confiable, sobre todo si el mensaje viene de una transcripción de audio.
 Nunca inventás cifras que no estén en el contexto que te pasan. Si falta un dato para registrar la operación, lo pedís en "texto" y dejás "confirmacion" y "operacion" en null.`
 
 const PESOS = (n: number) => `$${n.toLocaleString('es-AR')}`

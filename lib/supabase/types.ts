@@ -75,10 +75,13 @@ export type ProductoRow = {
   user_id: string
   nombre: string
   categoria: string
+  subcategoria: string | null
   costo: number
   precio: number
   stock: number
   stock_min: number
+  /** Código corto opcional, único por cuenta (ver migración 0007). */
+  codigo: string | null
   created_at: string
   updated_at: string
 }

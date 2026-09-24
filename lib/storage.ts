@@ -32,6 +32,7 @@ import type {
 } from './types'
 import { ahoraISO, hoyISO } from './format'
 import { CATEGORIAS_HOGAR } from './seed'
+import { asignarCodigo } from './codigos'
 import * as negocio from './supabase/negocio'
 import * as operaciones from './supabase/operaciones'
 
@@ -424,6 +425,7 @@ export async function addReposicion(rep: Omit<Reposicion, 'id'>) {
         precio: Math.round((item.costo * 1.6) / 10) * 10,
         stock: item.cantidad,
         stockMin: 5,
+        codigo: asignarCodigo(productos),
       })
       productos = [...productos, nuevo]
       items.push({ ...item, productoId: nuevo.id })
