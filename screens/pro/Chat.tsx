@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, ArrowUp, Check, Sparkles } from 'lucide-react'
+import { AlertTriangle, ArrowUp, Check, Mic, Sparkles, Square } from 'lucide-react'
 import { Screen, TopBar } from '@/components/ui/Screen'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
@@ -11,6 +11,7 @@ import { addVenta } from '@/lib/storage'
 import { ventasDelDia } from '@/lib/calc'
 import { ahoraISO, hoyISO, money } from '@/lib/format'
 import { preguntarAlAsistente, type Confirmacion, type Operacion } from '@/lib/asistente'
+import { useReconocimientoVoz } from '@/lib/voz'
 import { cn } from '@/lib/cn'
 import type { DB, ItemVenta } from '@/lib/types'
 
@@ -96,6 +97,21 @@ export function ProChat({ db }: { db: DB }) {
     ])
   }
 
+  // Dictado por voz: al reconocer la frase completa, se manda sola — no hay
+  // que revisarla a mano antes. No es riesgoso porque nada se escribe en los
+  // datos todavía en este paso: el asistente responde con una tarjeta de
+  // confirmación y hace falta un toque más ("Confirmar y aplicar al stock")
+  // para que la venta impacte de verdad, así que una transcripción rara
+  // como mucho pide de nuevo el producto en vez de cargar algo mal.
+  const voz = useReconocimientoVoz({
+    onResultado: (texto) => enviar(texto),
+    onError: (motivo) => {
+      if (motivo === 'silencio') return toast('No te escuché. Probá de nuevo.', 'aviso')
+      if (motivo === 'permiso') return toast('Rindo necesita permiso para usar el micrófono.', 'aviso')
+      toast('No pudimos usar el micrófono. Probá de nuevo.', 'aviso')
+    },
+  })
+
   /**
    * Aplica la venta propuesta. Resuelve cada producto contra el catálogo local
    * y calcula precio unitario y total desde ahí: si el producto cambió de
@@ -164,7 +180,9 @@ export function ProChat({ db }: { db: DB }) {
               <Sparkles className="size-5" strokeWidth={1.7} />
             </span>
             <p className="mt-3 text-[15px] font-medium text-ink">
-              Cargá una venta escribiendo, como se lo dirías a un empleado
+              {voz.soportado
+                ? 'Cargá una venta escribiendo o por voz, como se lo dirías a un empleado'
+                : 'Cargá una venta escribiendo, como se lo dirías a un empleado'}
             </p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-ink-faint">
               Te muestro el detalle y aplicás el stock sólo si está bien. También puedo decirte cómo
@@ -230,10 +248,33 @@ export function ProChat({ db }: { db: DB }) {
             id="chat-mensaje"
             value={borrador}
             onChange={(e) => setBorrador(e.target.value)}
-            placeholder="Vendí 2 kilos de azúcar…"
+            placeholder={voz.escuchando ? 'Escuchando…' : 'Vendí 2 kilos de azúcar…'}
             autoComplete="off"
             className="h-12 min-w-0 flex-1 rounded-input border border-line-strong bg-surface-2 px-3.5 text-[15px] text-ink placeholder:text-placeholder focus:border-accent-hi focus:bg-surface-3 focus:outline-none"
           />
+          {voz.soportado && (
+            <Button
+              type="button"
+              variant={voz.escuchando ? 'danger' : 'secondary'}
+              size="md"
+              aria-label={voz.escuchando ? 'Dejar de escuchar' : 'Cargar venta por voz'}
+              disabled={esperando}
+              onClick={() => (voz.escuchando ? voz.detener() : voz.iniciar())}
+              className="size-12 shrink-0 px-0"
+            >
+              <motion.span
+                animate={voz.escuchando ? { scale: [1, 1.12, 1] } : { scale: 1 }}
+                transition={{ duration: 1.1, repeat: voz.escuchando ? Infinity : 0 }}
+                className="inline-flex"
+              >
+                {voz.escuchando ? (
+                  <Square className="size-[17px]" strokeWidth={2} fill="currentColor" />
+                ) : (
+                  <Mic className="size-[19px]" strokeWidth={1.9} />
+                )}
+              </motion.span>
+            </Button>
+          )}
           <Button
             type="submit"
             size="md"
