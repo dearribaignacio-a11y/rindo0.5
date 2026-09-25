@@ -24,7 +24,12 @@ const MONEDAS = [
 ]
 
 /**
- * Configuración inicial, después de elegir plan y antes del onboarding.
+ * Configuración inicial, después de las credenciales y antes del onboarding.
+ * Ya no hay un paso de "elegí tu plan" antes de éste: toda cuenta nueva
+ * arranca con el mes gratis de Comercial Pro (`plan` llega siempre en
+ * 'comercial-pro' desde `Login`), y el `comercial` de acá abajo por eso da
+ * siempre `true` en el uso real — se deja el camino de Hogar andando por si
+ * hiciera falta volver a ofrecerlo como alta directa más adelante.
  *
  * Es un wizard de tres pasos y no un formulario largo: son datos que el
  * usuario tipea con una mano, parado en el mostrador. Cada paso pide como
@@ -127,16 +132,20 @@ export function SetupWizard({
       return
     }
 
-    // Un plan pago elegido acá arranca SIN la suscripción activa: apenas
-    // entre, `cuentaBloqueada` (lib/plans.ts) lo manda a cargar la tarjeta
-    // antes de dejarlo usar la app — si no, quedaba usando el plan pago
-    // gratis para siempre, porque nunca pasaba por "Cambiar plan".
+    // Toda cuenta nueva arranca con el mes gratis de Comercial Pro activo
+    // (el trigger `handle_new_user` ya lo dejó así del lado del servidor, ver
+    // migración 0008) — acá sólo se refleja lo mismo en el perfil local para
+    // no tener que esperar a `hidratarPerfil()` para verlo bien.
+    const proximoCobro = new Date()
+    proximoCobro.setMonth(proximoCobro.getMonth() + 1)
+
     const perfil: Perfil = comercial
       ? {
           nombre: nombreApellido,
           email,
           plan,
-          suscripcionActiva: false,
+          suscripcionActiva: true,
+          proximoCobro: proximoCobro.toISOString().slice(0, 10),
           moneda,
           negocio: negocio.trim(),
           rubro,

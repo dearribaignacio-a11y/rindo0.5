@@ -81,8 +81,8 @@ function AvisoBloqueo({ perfil, onCerrarSesion }: { perfil: Perfil; onCerrarSesi
         </span>
         <h1 className="text-[20px] font-semibold text-ink">Tu cuenta está pausada</h1>
         <p className="mt-2 max-w-[32ch] text-[14px] leading-relaxed text-ink-faint">
-          Venció el pago del plan {plan.nombre} y todavía no se renovó. Pagalo de nuevo para volver
-          a usar Rindo — tus datos siguen ahí, no se borró nada.
+          Se terminó tu período del plan {plan.nombre} (puede ser el mes de prueba gratis, o una
+          renovación pendiente). Pagalo para seguir usándolo — tus datos siguen ahí, no se borró nada.
         </p>
 
         <Card className="mt-6 w-full max-w-sm p-4">
