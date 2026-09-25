@@ -125,6 +125,15 @@ export type ReposicionRow = {
   created_at: string
 }
 
+/** Fila de la tabla `aperturas_caja`: una por día por cuenta. */
+export type AperturaCajaRow = {
+  id: string
+  user_id: string
+  fecha: string
+  monto_inicial: number
+  created_at: string
+}
+
 /** Tipado mínimo de la base para el cliente tipado de Supabase. Sólo declara
  *  lo que las migraciones crean; se amplía a medida que se agreguen tablas.
  *  `Relationships`, `Views` y `Functions` están vacíos a propósito — nada acá
@@ -167,6 +176,12 @@ export type Database = {
         Row: ReposicionRow
         Insert: Partial<ReposicionRow> & { user_id: string; fecha: string; origen: ReposicionRow['origen'] }
         Update: Partial<ReposicionRow>
+        Relationships: []
+      }
+      aperturas_caja: {
+        Row: AperturaCajaRow
+        Insert: Partial<AperturaCajaRow> & { user_id: string; fecha: string; monto_inicial: number }
+        Update: Partial<AperturaCajaRow>
         Relationships: []
       }
     }

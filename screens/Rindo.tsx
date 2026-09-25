@@ -50,6 +50,7 @@ import { ProChat } from '@/screens/pro/Chat'
 import { useDB, useMontado } from '@/lib/hooks'
 import {
   aplicarTema,
+  hidratarCaja,
   hidratarNegocio,
   hidratarOperaciones,
   hidratarPerfil,
@@ -89,6 +90,7 @@ export function Rindo() {
           // vuelve a intentarlo la próxima vez que se monte.
         })
         hidratarOperaciones().catch(() => {})
+        hidratarCaja().catch(() => {})
       })
 
     const cortar = suscribirseAOperaciones()

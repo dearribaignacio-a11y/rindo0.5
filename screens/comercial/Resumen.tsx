@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Camera, PackageSearch, PencilLine, Receipt, TrendingUp } from 'lucide-react'
+import { Camera, Landmark, PackageSearch, PencilLine, Receipt, TrendingUp } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { BarChart } from '@/components/ui/BarChart'
 import { Screen, SectionTitle } from '@/components/ui/Screen'
@@ -9,6 +9,7 @@ import { Fab } from '@/components/ui/Fab'
 import { Avatar, Badge, Empty, Row } from '@/components/ui/Bits'
 import { IconChip, iconoRubro } from '@/components/ui/Icon'
 import { VentaSheet } from '@/components/comercial/VentaSheet'
+import { AbrirCajaSheet } from '@/components/comercial/AbrirCajaSheet'
 import { useNav } from '@/components/nav'
 import { rankingProductos, stockCritico, ticketPromedio, totalVentas, ventasDelDia, ventasPorHora } from '@/lib/calc'
 import { hora, hoyISO, money, moneyCorto } from '@/lib/format'
@@ -16,7 +17,7 @@ import type { DB } from '@/lib/types'
 
 export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => void }) {
   const nav = useNav()
-  const [sheet, setSheet] = useState<'ninguno' | 'venta'>('ninguno')
+  const [sheet, setSheet] = useState<'ninguno' | 'venta' | 'caja'>('ninguno')
 
   const hoy = hoyISO()
   const ventasHoy = ventasDelDia(db.ventas, hoy)
@@ -26,6 +27,11 @@ export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => v
   const critico = stockCritico(db.productos)
   const ultimas = db.ventas.slice(0, 4)
   const negocio = db.perfil?.negocio || db.perfil?.nombre || 'tu negocio'
+
+  // No descuenta gastos ni reposiciones: esas todavía no registran con qué
+  // se pagaron, así que sólo se puede sumar lo que sí se sabe con certeza.
+  const efectivoHoy = ventasHoy.filter((v) => v.metodo === 'efectivo').reduce((s, v) => s + v.total, 0)
+  const cajaEstimada = (db.cajaHoy?.montoInicial ?? 0) + efectivoHoy
 
   return (
     <>
@@ -62,6 +68,46 @@ export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => v
             </div>
           </div>
         </Card>
+
+        <SectionTitle
+          action={
+            db.cajaHoy && (
+              <button
+                type="button"
+                onClick={() => setSheet('caja')}
+                className="text-[12.5px] text-ink-muted transition-colors hover:text-ink"
+              >
+                Corregir
+              </button>
+            )
+          }
+        >
+          Caja
+        </SectionTitle>
+        {db.cajaHoy ? (
+          <Card className="flex items-center gap-3">
+            <IconChip icon={Landmark} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] text-ink-faint">
+                Apertura {money(db.cajaHoy.montoInicial)} + {money(efectivoHoy)} en efectivo hoy
+              </p>
+              <p className="tabular mt-0.5 text-[19px] font-semibold text-ink">{money(cajaEstimada)}</p>
+            </div>
+          </Card>
+        ) : (
+          <Card
+            interactive
+            onClick={() => setSheet('caja')}
+            className="flex items-center gap-3 border-accent-hi/40 bg-accent-dim/20"
+          >
+            <IconChip icon={Landmark} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-medium text-ink">Todavía no abriste la caja hoy</p>
+              <p className="mt-0.5 text-[12.5px] text-ink-faint">Tocá para cargar con cuánto arrancás</p>
+            </div>
+            <Badge tone="accent">Abrir</Badge>
+          </Card>
+        )}
 
         <SectionTitle
           action={pico ? <span className="tabular text-[12px] text-ink-faint">Pico {pico.hora}hs</span> : undefined}
@@ -168,6 +214,11 @@ export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => v
       />
 
       <VentaSheet open={sheet === 'venta'} onClose={() => setSheet('ninguno')} productos={db.productos} />
+      <AbrirCajaSheet
+        open={sheet === 'caja'}
+        onClose={() => setSheet('ninguno')}
+        montoActual={db.cajaHoy?.montoInicial}
+      />
     </>
   )
 }

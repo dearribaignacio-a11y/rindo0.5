@@ -164,6 +164,15 @@ export interface Empresa {
   moneda: string
 }
 
+/** Con cuánto efectivo arranca la caja un día puntual — vive en Supabase
+ *  (una fila por día, ver `lib/supabase/caja.ts`), no en este documento
+ *  local; se agrega acá para que `DB.cajaHoy` tenga tipo. */
+export interface AperturaCaja {
+  /** ISO corto: yyyy-mm-dd. */
+  fecha: string
+  montoInicial: number
+}
+
 export interface PagoImpuesto {
   fecha: string
   monto: number
@@ -226,6 +235,9 @@ export interface DB {
   productos: Producto[]
   ventas: Venta[]
   reposiciones: Reposicion[]
+  /** Apertura de caja del día — null hasta que se cargue (ver `abrirCaja` en
+   *  lib/storage.ts) o si el día cambió desde la última apertura guardada. */
+  cajaHoy: AperturaCaja | null
   empleados: Empleado[]
   impuestos: Impuesto[]
   mensajes: Mensaje[]

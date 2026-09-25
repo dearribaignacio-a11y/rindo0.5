@@ -35,6 +35,7 @@ import { CATEGORIAS_HOGAR } from './seed'
 import { asignarCodigo } from './codigos'
 import * as negocio from './supabase/negocio'
 import * as operaciones from './supabase/operaciones'
+import * as caja from './supabase/caja'
 
 const KEY = 'rindo.db'
 const THEME_KEY = 'rindo.theme'
@@ -51,6 +52,7 @@ export const dbVacia = (): DB => ({
   productos: [],
   ventas: [],
   reposiciones: [],
+  cajaHoy: null,
   empleados: [],
   impuestos: [],
   mensajes: [],
@@ -75,15 +77,17 @@ function leerDisco(): DB {
     return {
       ...dbVacia(),
       ...parsed,
-      // Empresa, empleados, productos, ventas y reposiciones viven en
-      // Supabase, no acá — arrancan vacíos hasta que `hidratarNegocio()` /
-      // `hidratarOperaciones()` los traen, aunque una versión vieja de este
-      // mismo documento los tuviera guardados.
+      // Empresa, empleados, productos, ventas, reposiciones y la apertura de
+      // caja viven en Supabase, no acá — arrancan vacíos hasta que
+      // `hidratarNegocio()` / `hidratarOperaciones()` / `hidratarCaja()` los
+      // traen, aunque una versión vieja de este mismo documento los tuviera
+      // guardados.
       empresa: null,
       empleados: [],
       productos: [],
       ventas: [],
       reposiciones: [],
+      cajaHoy: null,
       version: VERSION,
     }
   } catch {
@@ -95,7 +99,7 @@ function escribirDisco(db: DB) {
   if (typeof window === 'undefined') return
   try {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { empresa, empleados, productos, ventas, reposiciones, ...persistible } = db
+    const { empresa, empleados, productos, ventas, reposiciones, cajaHoy, ...persistible } = db
     window.localStorage.setItem(KEY, JSON.stringify(persistible))
   } catch {
     // Cuota llena o modo privado: la app sigue andando en memoria.
@@ -482,6 +486,28 @@ export async function updateEmpleado(eid: string, patch: Partial<Empleado>) {
 export async function removeEmpleado(eid: string) {
   await negocio.borrarEmpleado(eid)
   setDB((db) => ({ ...db, empleados: db.empleados.filter((e) => e.id !== eid) }))
+}
+
+/* ── Caja diaria (Supabase) ────────────────────────────────────────────────
+   Igual que Empresa/Empleados: no vive en localStorage. `cache.cajaHoy` es
+   `null` tanto si todavía no se abrió la caja hoy como si lo que había
+   guardado es de un día anterior — `hidratarCaja()` sólo lo llena si la
+   fecha de la apertura coincide con hoy. */
+
+export const getCajaHoy = () => getDB().cajaHoy
+
+/** Trae la apertura de hoy de Supabase, si existe. Se llama una vez al
+ *  entrar al dashboard (ver `screens/Rindo.tsx`). */
+export async function hidratarCaja() {
+  const cajaHoy = await caja.fetchApertura(hoyISO())
+  setDB((db) => ({ ...db, cajaHoy }))
+}
+
+/** Carga (o corrige) con cuánto efectivo arranca la caja hoy. */
+export async function abrirCaja(montoInicial: number) {
+  const cajaHoy = await caja.guardarApertura(hoyISO(), montoInicial)
+  setDB((db) => ({ ...db, cajaHoy }))
+  return cajaHoy
 }
 
 /* ── Impuestos ─────────────────────────────────────────────────────────── */
