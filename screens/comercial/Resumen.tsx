@@ -141,7 +141,19 @@ export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => v
           </>
         )}
 
-        <SectionTitle>Más vendido hoy</SectionTitle>
+        <SectionTitle
+          action={
+            <button
+              type="button"
+              onClick={() => nav.push('mas-vendidos')}
+              className="text-[12.5px] text-ink-muted transition-colors hover:text-ink"
+            >
+              Ver todo
+            </button>
+          }
+        >
+          Más vendido hoy
+        </SectionTitle>
         {top.length === 0 ? (
           <Card>
             <p className="text-[13.5px] leading-relaxed text-ink-muted">

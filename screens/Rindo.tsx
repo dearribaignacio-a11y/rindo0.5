@@ -38,6 +38,7 @@ import { ComercialResumen } from '@/screens/comercial/Resumen'
 import { ComercialMovimientos } from '@/screens/comercial/Movimientos'
 import { ComercialProductos } from '@/screens/comercial/Productos'
 import { ComercialStock } from '@/screens/comercial/Stock'
+import { MasVendidos } from '@/screens/comercial/MasVendidos'
 import { StockFoto } from '@/screens/comercial/StockFoto'
 import { Empleados } from '@/screens/comercial/Empleados'
 import { MiNegocio } from '@/screens/comercial/MiNegocio'
@@ -189,6 +190,7 @@ function Interna({ db }: { db: DB }) {
         {ruta === 'mi-negocio' && <MiNegocio db={db} />}
         {ruta === 'empleados' && <Empleados db={db} />}
         {ruta === 'impuestos' && <Impuestos db={db} />}
+        {ruta === 'mas-vendidos' && <MasVendidos db={db} />}
         {ruta === 'pro-precios' && esPro(plan) && <ProPrecios db={db} />}
         {ruta === 'pro-personal' && esPro(plan) && <ProPersonal db={db} />}
         {ruta === 'pro-impuestos' && esPro(plan) && <ProImpuestos db={db} />}

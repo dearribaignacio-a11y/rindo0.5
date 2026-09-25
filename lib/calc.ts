@@ -88,6 +88,20 @@ export const totalVentas = (ventas: Venta[]) => ventas.reduce((s, v) => s + v.to
 export const ventasDelDia = (ventas: Venta[], dia: string) =>
   ventas.filter((v) => v.fecha.slice(0, 10) === dia)
 
+export type PeriodoRanking = 'hoy' | 'semana' | 'mes' | 'todo'
+
+/** Ventas de los últimos N días corridos, incluido hoy — "todo" no filtra
+ *  nada. Se usa para el ranking de más vendidos con distintas ventanas. */
+export function ventasEnPeriodo(ventas: Venta[], periodo: PeriodoRanking): Venta[] {
+  if (periodo === 'todo') return ventas
+  if (periodo === 'hoy') return ventasDelDia(ventas, hoyISO())
+  const dias = periodo === 'semana' ? 7 : 30
+  const desde = new Date()
+  desde.setHours(0, 0, 0, 0)
+  desde.setDate(desde.getDate() - (dias - 1))
+  return ventas.filter((v) => new Date(v.fecha) >= desde)
+}
+
 /** Serie de los últimos `dias` días, del más viejo al más nuevo. */
 export function serieVentas(ventas: Venta[], dias = 7) {
   const salida: { label: string; value: number; iso: string; highlight?: boolean }[] = []
@@ -132,6 +146,10 @@ export interface RankingProducto {
   nombre: string
   unidades: number
   facturado: number
+  /** Facturado menos el costo ACTUAL del producto × unidades — estimado con
+   *  el costo de hoy, no el que tenía en cada venta (no se guarda un
+   *  histórico de costo por venta), igual que ya hace `margen()`. */
+  ganancia: number
 }
 
 /** Qué se vendió más en un conjunto de ventas. */
@@ -139,17 +157,21 @@ export function rankingProductos(ventas: Venta[], productos: Producto[]): Rankin
   const acum = new Map<string, RankingProducto>()
   for (const v of ventas) {
     for (const i of v.items) {
+      const producto = productos.find((p) => p.id === i.productoId)
+      const costoUnit = producto?.costo ?? 0
       const previo = acum.get(i.productoId)
       if (previo) {
         previo.unidades += i.cantidad
         previo.facturado += i.cantidad * i.precio
+        previo.ganancia += i.cantidad * (i.precio - costoUnit)
       } else {
         acum.set(i.productoId, {
           productoId: i.productoId,
           nombre: i.nombre,
-          producto: productos.find((p) => p.id === i.productoId),
+          producto,
           unidades: i.cantidad,
           facturado: i.cantidad * i.precio,
+          ganancia: i.cantidad * (i.precio - costoUnit),
         })
       }
     }
