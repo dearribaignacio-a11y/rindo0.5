@@ -150,7 +150,7 @@ export function ProChat({ db }: { db: DB }) {
     const total = items.reduce((s, i) => s + i.precio * i.cantidad, 0)
 
     try {
-      await addVenta({ fecha: ahoraISO(), items, total, metodo: 'efectivo' })
+      await addVenta({ fecha: ahoraISO(), items, total, metodo: op.metodo ?? 'efectivo' })
     } catch {
       toast('No pudimos registrar la venta. Probá de nuevo.', 'aviso')
       return

@@ -1,5 +1,7 @@
 'use client'
 
+import type { MetodoPago } from './types'
+
 /** Cliente del Route Handler `/api/asistente`. Único punto por donde la app
  *  habla con el asistente; si cambia el proveedor, cambia el handler. */
 
@@ -18,6 +20,7 @@ export interface Confirmacion {
 export interface Operacion {
   tipo: 'venta'
   items: { productoId: string; cantidad: number }[]
+  metodo: MetodoPago
 }
 
 export interface ContextoAsistente {

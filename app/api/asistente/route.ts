@@ -19,6 +19,14 @@ interface Contexto {
   ticketsHoy?: number
 }
 
+type MetodoPago = 'efectivo' | 'tarjeta' | 'transferencia'
+const METODOS: MetodoPago[] = ['efectivo', 'tarjeta', 'transferencia']
+const ETIQUETA_METODO: Record<MetodoPago, string> = {
+  efectivo: 'Efectivo',
+  tarjeta: 'Tarjeta',
+  transferencia: 'Transferencia',
+}
+
 /**
  * Operación que el asistente propone aplicar sobre los datos.
  *
@@ -31,6 +39,9 @@ interface Contexto {
 interface Operacion {
   tipo: 'venta'
   items: { productoId: string; cantidad: number }[]
+  /** Efectivo si no se dice nada — es lo más común en el mostrador y así no
+   *  hace falta preguntarlo siempre. */
+  metodo: MetodoPago
 }
 
 interface Respuesta {
@@ -67,22 +78,33 @@ function operacionValida(op: unknown, ctx: Contexto): Operacion | undefined {
     .map((i) => ({ productoId: i.productoId, cantidad: Math.floor(i.cantidad) }))
     .filter((i) => i.cantidad > 0)
 
-  return items.length ? { tipo: 'venta', items } : undefined
+  const metodo = METODOS.includes(o.metodo as MetodoPago) ? (o.metodo as MetodoPago) : 'efectivo'
+
+  return items.length ? { tipo: 'venta', items, metodo } : undefined
 }
 
 const SISTEMA = `Sos el asistente de Rindo, una app de gestión para comercios chicos de San Juan, Argentina.
 Hablás en español rioplatense, en segunda persona ("vos"), en tono directo y breve: dos o tres oraciones como máximo.
 
 Devolvés SIEMPRE un único objeto JSON, sin texto alrededor, con esta forma:
-{"texto": string, "confirmacion": {"titulo": string, "lineas": [{"etiqueta": string, "valor": string}]} | null, "operacion": {"tipo": "venta", "items": [{"productoId": string, "cantidad": number}]} | null}
+{"texto": string, "confirmacion": {"titulo": string, "lineas": [{"etiqueta": string, "valor": string}]} | null, "operacion": {"tipo": "venta", "items": [{"productoId": string, "cantidad": number}], "metodo": "efectivo" | "tarjeta" | "transferencia"} | null}
 
 Usás "confirmacion" solamente cuando el usuario pide registrar algo concreto (una venta, una reposición, un gasto): ahí resumís lo entendido en líneas cortas para que lo confirme antes de impactar los datos. Para preguntas de consulta, "confirmacion" va en null.
 
 Cuando la operación es una venta de productos del catálogo, además de "confirmacion" completás "operacion" con el "id" EXACTO de cada producto tal como figura en el contexto y la cantidad como número entero. No inventes ids: si no encontrás el producto en el contexto, dejá "operacion" en null y pedí el nombre en "texto".
 Algunos productos del contexto traen "codigo", un código corto que el comerciante les asignó (ej. "20" para el Fernet). Si el mensaje menciona un número o código corto (típico al dictar una venta rápido: "20, uno" = un Fernet), priorizá matchear por "codigo" exacto antes que por nombre — es una señal más confiable, sobre todo si el mensaje viene de una transcripción de audio.
+En "metodo" completás cómo pagaron si el mensaje lo dice: "tarjeta" para tarjeta/débito/crédito/posnet, "transferencia" para transferencia/QR/Mercado Pago/alias/CBU, "efectivo" para efectivo. Si no lo menciona, usá "efectivo" — es lo más común en un mostrador y no hace falta preguntarlo siempre. Reflejá el método elegido como una línea más en "confirmacion" (etiqueta "Método de pago").
 Nunca inventás cifras que no estén en el contexto que te pasan. Si falta un dato para registrar la operación, lo pedís en "texto" y dejás "confirmacion" y "operacion" en null.`
 
 const PESOS = (n: number) => `$${n.toLocaleString('es-AR')}`
+
+/** Efectivo por defecto si no se menciona nada — es lo más común y así no
+ *  hace falta preguntarlo en cada venta. */
+function detectarMetodo(texto: string): MetodoPago {
+  if (/tarjeta|d[eé]bito|cr[eé]dito|posnet|point/.test(texto)) return 'tarjeta'
+  if (/transferencia|\bqr\b|mercado ?pago|\bmp\b|alias|cbu/.test(texto)) return 'transferencia'
+  return 'efectivo'
+}
 
 /**
  * Simulación por reglas. Cubre los tres pedidos más frecuentes del mostrador:
@@ -94,6 +116,7 @@ function simular(mensaje: string, ctx: Contexto): Respuesta {
 
   const nombrado = productos.find((p) => texto.includes(p.nombre.toLowerCase().split(' ')[0]))
   const cantidad = Number(/(\d+)/.exec(texto)?.[1] ?? 1)
+  const metodo = detectarMetodo(texto)
 
   /* La consulta va ANTES de la venta a propósito. "¿Cuánto vendí hoy?"
      contiene "vendí" y caía en la rama de registrar una venta: el asistente
@@ -126,9 +149,10 @@ function simular(mensaje: string, ctx: Contexto): Respuesta {
           { etiqueta: 'Cantidad', valor: String(cantidad) },
           { etiqueta: 'Precio unitario', valor: PESOS(nombrado.precio) },
           { etiqueta: 'Total', valor: PESOS(total) },
+          { etiqueta: 'Método de pago', valor: ETIQUETA_METODO[metodo] },
         ],
       },
-      operacion: { tipo: 'venta', items: [{ productoId: nombrado.id, cantidad }] },
+      operacion: { tipo: 'venta', items: [{ productoId: nombrado.id, cantidad }], metodo },
     }
   }
 
