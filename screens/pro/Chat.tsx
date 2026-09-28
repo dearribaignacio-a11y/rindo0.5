@@ -2,16 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { AlertTriangle, ArrowUp, Check, Mic, Sparkles, Square } from 'lucide-react'
+import { AlertTriangle, ArrowUp, Camera, Check, Mic, Sparkles, Square, Volume2, VolumeX } from 'lucide-react'
 import { Screen, TopBar } from '@/components/ui/Screen'
 import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/Toast'
 import { useNav } from '@/components/nav'
 import { addVenta } from '@/lib/storage'
-import { ventasDelDia } from '@/lib/calc'
-import { ahoraISO, hoyISO, money } from '@/lib/format'
-import { preguntarAlAsistente, type Confirmacion, type Operacion } from '@/lib/asistente'
-import { useReconocimientoVoz } from '@/lib/voz'
+import { rankingProductos, totalVentas, ventasDelDia, ventasDelMes } from '@/lib/calc'
+import { ahoraISO, hoyISO, isoLocal, money } from '@/lib/format'
+import {
+  preguntarAlAsistente,
+  type Confirmacion,
+  type MensajeHistorial,
+  type Operacion,
+} from '@/lib/asistente'
+import { useLecturaEnVoz, useReconocimientoVoz } from '@/lib/voz'
 import { cn } from '@/lib/cn'
 import type { DB, ItemVenta } from '@/lib/types'
 
@@ -27,14 +32,23 @@ interface Burbuja {
   error?: boolean
 }
 
-const SUGERENCIAS = ['Vendí 3 gaseosas', '¿Cómo vengo hoy?', '¿Qué stock me queda?']
+const SUGERENCIAS = [
+  'Vendí 3 gaseosas',
+  '¿Cómo vengo esta semana?',
+  '¿Qué tengo que reponer?',
+  '¿Qué es lo que más se vende?',
+]
+
+/** Silenciar la voz del asistente es una preferencia del dispositivo. */
+const CLAVE_SILENCIO = 'rindo.asistente.silencio'
 
 /**
  * Asistente por chat del plan Comercial Pro.
  *
- * Habla contra `/api/asistente`, que responde con un modelo real si hay clave
- * configurada y con una simulación por reglas si no. La pantalla no distingue
- * entre las dos: sólo muestra de dónde vino la respuesta.
+ * Se puede escribir o hablar. La charla tiene memoria: cada pedido manda la
+ * conversación entera a `/api/asistente`, así "sumale otra" o "¿y ayer?" se
+ * entienden. Cuando el mensaje se dictó por voz, la respuesta también se lee
+ * en voz alta (se puede silenciar arriba a la derecha).
  *
  * Lo que el asistente propone nunca se escribe solo. Cuando la respuesta trae
  * una operación, aparece una tarjeta con el detalle y un botón de confirmar;
@@ -47,22 +61,53 @@ export function ProChat({ db }: { db: DB }) {
   const [mensajes, setMensajes] = useState<Burbuja[]>([])
   const [borrador, setBorrador] = useState('')
   const [esperando, setEsperando] = useState(false)
+  /** true si el servidor respondió en modo básico (sin clave de IA). */
+  const [modoBasico, setModoBasico] = useState(false)
+  const [silencio, setSilencio] = useState(false)
   const seq = useRef(0)
   const finDeLista = useRef<HTMLDivElement>(null)
 
+  useEffect(() => {
+    try {
+      setSilencio(localStorage.getItem(CLAVE_SILENCIO) === '1')
+    } catch {
+      // Sin almacenamiento (modo privado): queda con voz.
+    }
+  }, [])
+
   const contexto = useMemo(() => {
-    const hoy = ventasDelDia(db.ventas, hoyISO())
+    const hoy = hoyISO()
+    const deHoy = ventasDelDia(db.ventas, hoy)
+    const delMes = ventasDelMes(db.ventas)
+
+    const ultimosDias = Array.from({ length: 7 }, (_, k) => {
+      const d = new Date()
+      d.setDate(d.getDate() - k)
+      const dia = isoLocal(d)
+      const ventas = ventasDelDia(db.ventas, dia)
+      return { dia, total: totalVentas(ventas), tickets: ventas.length }
+    })
+
     return {
       negocio: db.perfil?.negocio,
+      fecha: ahoraISO(),
       productos: db.productos.map((p) => ({
         id: p.id,
         nombre: p.nombre,
         codigo: p.codigo,
+        categoria: p.categoria,
         precio: p.precio,
+        costo: p.costo,
         stock: p.stock,
+        stockMin: p.stockMin,
       })),
-      ventasHoy: hoy.reduce((s, v) => s + v.total, 0),
-      ticketsHoy: hoy.length,
+      ventasHoy: totalVentas(deHoy),
+      ticketsHoy: deHoy.length,
+      ultimosDias,
+      ventasMes: totalVentas(delMes),
+      masVendidosMes: rankingProductos(delMes, db.productos)
+        .slice(0, 10)
+        .map((r) => ({ nombre: r.nombre, unidades: r.unidades, facturado: r.facturado })),
     }
   }, [db.perfil?.negocio, db.productos, db.ventas])
 
@@ -71,17 +116,43 @@ export function ProChat({ db }: { db: DB }) {
     finDeLista.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [mensajes, esperando])
 
-  async function enviar(texto: string) {
+  const lectura = useLecturaEnVoz()
+
+  /** Lo que se le manda al modelo como historia de la charla. Las propuestas
+   *  de venta van resumidas con su estado, para que sepa si ya se aplicaron. */
+  function historial(burbujas: Burbuja[]): MensajeHistorial[] {
+    return burbujas
+      .filter((b) => !b.error)
+      .map((b) => {
+        if (b.de === 'usuario' || !b.confirmacion) return { rol: b.de, texto: b.texto }
+        const detalle = b.confirmacion.lineas.map((l) => `${l.etiqueta}: ${l.valor}`).join('; ')
+        const estado = b.aplicada ? 'el usuario la confirmó y quedó registrada' : 'todavía sin confirmar'
+        return {
+          rol: b.de,
+          texto: `${b.texto}\n[Propuesta "${b.confirmacion.titulo}" — ${detalle} — ${estado}]`,
+        }
+      })
+  }
+
+  async function enviar(texto: string, opciones: { porVoz?: boolean } = {}) {
     const limpio = texto.trim()
     if (!limpio || esperando) return
 
     const propio: Burbuja = { id: ++seq.current, de: 'usuario', texto: limpio }
-    setMensajes((m) => [...m, propio])
+    const conversacion = [...mensajes, propio]
+    setMensajes(conversacion)
     setBorrador('')
     setEsperando(true)
 
-    const res = await preguntarAlAsistente(limpio, contexto)
+    const res = await preguntarAlAsistente(historial(conversacion), contexto)
     setEsperando(false)
+
+    if (res.ok) {
+      setModoBasico(res.fuente === 'simulado')
+      if (opciones.porVoz && !silencio) lectura.hablar(res.texto)
+    } else if (opciones.porVoz && !silencio) {
+      lectura.hablar(res.error)
+    }
 
     setMensajes((m) => [
       ...m,
@@ -97,20 +168,41 @@ export function ProChat({ db }: { db: DB }) {
     ])
   }
 
-  // Dictado por voz: al reconocer la frase completa, se manda sola — no hay
-  // que revisarla a mano antes. No es riesgoso porque nada se escribe en los
-  // datos todavía en este paso: el asistente responde con una tarjeta de
-  // confirmación y hace falta un toque más ("Confirmar y aplicar al stock")
-  // para que la venta impacte de verdad, así que una transcripción rara
-  // como mucho pide de nuevo el producto en vez de cargar algo mal.
+  // Dictado por voz: mientras se habla, lo que se va entendiendo aparece en
+  // la caja de texto; al terminar la frase se manda sola. No es riesgoso
+  // porque nada se escribe en los datos en este paso: una venta siempre pide
+  // un toque más en "Confirmar y aplicar al stock".
   const voz = useReconocimientoVoz({
-    onResultado: (texto) => enviar(texto),
+    onParcial: (texto) => setBorrador(texto),
+    onResultado: (texto) => enviar(texto, { porVoz: true }),
     onError: (motivo) => {
+      setBorrador('')
+      if (motivo === 'cancelado') return
       if (motivo === 'silencio') return toast('No te escuché. Probá de nuevo.', 'aviso')
       if (motivo === 'permiso') return toast('Rindo necesita permiso para usar el micrófono.', 'aviso')
       toast('No pudimos usar el micrófono. Probá de nuevo.', 'aviso')
     },
   })
+
+  function tocarMicrofono() {
+    if (voz.escuchando) return voz.detener()
+    // Este toque "habilita" la voz del asistente en iPhone para la respuesta.
+    if (!silencio) lectura.preparar()
+    setBorrador('')
+    voz.iniciar()
+  }
+
+  function alternarSilencio() {
+    const nuevo = !silencio
+    setSilencio(nuevo)
+    if (nuevo) lectura.callar()
+    try {
+      localStorage.setItem(CLAVE_SILENCIO, nuevo ? '1' : '0')
+    } catch {
+      // Preferencia sólo por esta visita.
+    }
+    toast(nuevo ? 'Respuestas en voz alta desactivadas' : 'Las respuestas a tus audios se leen en voz alta')
+  }
 
   /**
    * Aplica la venta propuesta. Resuelve cada producto contra el catálogo local
@@ -171,9 +263,47 @@ export function ProChat({ db }: { db: DB }) {
 
   return (
     <Screen pad="none" className="flex min-h-dvh flex-col">
-      <TopBar title="Asistente" onBack={nav.pop} />
+      <TopBar
+        title="Asistente"
+        subtitle={lectura.hablando ? 'Hablando…' : voz.escuchando ? 'Escuchando…' : undefined}
+        onBack={nav.pop}
+        action={
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => nav.push('stock-foto')}
+              aria-label="Cargar factura por foto"
+              className="grid size-10 place-items-center rounded-xl text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <Camera className="size-[19px]" strokeWidth={1.9} />
+            </button>
+            {lectura.soportado && (
+              <button
+                type="button"
+                onClick={alternarSilencio}
+                aria-pressed={!silencio}
+                aria-label={silencio ? 'Activar respuestas en voz alta' : 'Silenciar respuestas en voz alta'}
+                className="grid size-10 place-items-center rounded-xl text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+              >
+                {silencio ? (
+                  <VolumeX className="size-[19px]" strokeWidth={1.9} />
+                ) : (
+                  <Volume2 className={cn('size-[19px]', lectura.hablando && 'text-accent-hi')} strokeWidth={1.9} />
+                )}
+              </button>
+            )}
+          </div>
+        }
+      />
 
       <div className="flex-1 space-y-3 pb-4">
+        {modoBasico && (
+          <p className="rounded-[10px] border border-warn/40 bg-warn-dim px-3 py-2 text-[12px] leading-relaxed text-warn">
+            Modo básico: la IA todavía no está activada en el servidor (falta ANTHROPIC_API_KEY en
+            Vercel). Puedo anotar ventas simples y responder lo básico.
+          </p>
+        )}
+
         {mensajes.length === 0 && (
           <div className="rounded-card border border-line bg-surface-2/60 p-5">
             <span className="grid size-11 place-items-center rounded-2xl border border-line bg-surface text-accent-hi">
@@ -181,12 +311,12 @@ export function ProChat({ db }: { db: DB }) {
             </span>
             <p className="mt-3 text-[15px] font-medium text-ink">
               {voz.soportado
-                ? 'Cargá una venta escribiendo o por voz, como se lo dirías a un empleado'
-                : 'Cargá una venta escribiendo, como se lo dirías a un empleado'}
+                ? 'Escribime o hablame, como le hablarías a un empleado'
+                : 'Escribime como le escribirías a un empleado'}
             </p>
             <p className="mt-1.5 text-[13px] leading-relaxed text-ink-faint">
-              Te muestro el detalle y aplicás el stock sólo si está bien. También puedo decirte cómo
-              venís hoy o qué te está faltando.
+              Te anoto ventas (las aplicás sólo si están bien), te digo cómo venís, qué se vende más y
+              qué reponer. Si me hablás con el micrófono, te respondo en voz alta.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               {SUGERENCIAS.map((s) => (
@@ -204,7 +334,12 @@ export function ProChat({ db }: { db: DB }) {
         )}
 
         {mensajes.map((m) => (
-          <Mensaje key={m.id} burbuja={m} onAplicar={() => aplicar(m)} />
+          <Mensaje
+            key={m.id}
+            burbuja={m}
+            onAplicar={() => aplicar(m)}
+            onEscuchar={lectura.soportado && !m.error && m.de === 'asistente' ? () => lectura.hablar(m.texto) : undefined}
+          />
         ))}
 
         <AnimatePresence>
@@ -213,7 +348,7 @@ export function ProChat({ db }: { db: DB }) {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="flex gap-1.5 rounded-card border border-line bg-surface px-4 py-3.5"
+              className="flex w-fit gap-1.5 rounded-card border border-line bg-surface px-4 py-3.5"
               role="status"
               aria-label="El asistente está escribiendo"
             >
@@ -236,7 +371,7 @@ export function ProChat({ db }: { db: DB }) {
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          enviar(borrador)
+          if (!voz.escuchando) enviar(borrador)
         }}
         className="app-col sticky bottom-0 -mx-5 border-t border-line bg-bg/95 px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:-mx-6 sm:px-6"
       >
@@ -248,18 +383,23 @@ export function ProChat({ db }: { db: DB }) {
             id="chat-mensaje"
             value={borrador}
             onChange={(e) => setBorrador(e.target.value)}
-            placeholder={voz.escuchando ? 'Escuchando…' : 'Vendí 2 kilos de azúcar…'}
+            readOnly={voz.escuchando}
+            placeholder={voz.escuchando ? 'Escuchando… hablá tranquilo' : 'Escribí o tocá el micrófono…'}
             autoComplete="off"
-            className="h-12 min-w-0 flex-1 rounded-input border border-line-strong bg-surface-2 px-3.5 text-[15px] text-ink placeholder:text-placeholder focus:border-accent-hi focus:bg-surface-3 focus:outline-none"
+            enterKeyHint="send"
+            className={cn(
+              'h-12 min-w-0 flex-1 rounded-input border border-line-strong bg-surface-2 px-3.5 text-[15px] text-ink placeholder:text-placeholder focus:border-accent-hi focus:bg-surface-3 focus:outline-none',
+              voz.escuchando && 'border-accent-hi italic text-ink-muted',
+            )}
           />
           {voz.soportado && (
             <Button
               type="button"
               variant={voz.escuchando ? 'danger' : 'secondary'}
               size="md"
-              aria-label={voz.escuchando ? 'Dejar de escuchar' : 'Cargar venta por voz'}
+              aria-label={voz.escuchando ? 'Dejar de escuchar' : 'Hablarle al asistente'}
               disabled={esperando}
-              onClick={() => (voz.escuchando ? voz.detener() : voz.iniciar())}
+              onClick={tocarMicrofono}
               className="size-12 shrink-0 px-0"
             >
               <motion.span
@@ -279,7 +419,7 @@ export function ProChat({ db }: { db: DB }) {
             type="submit"
             size="md"
             aria-label="Enviar mensaje"
-            disabled={!borrador.trim() || esperando}
+            disabled={!borrador.trim() || esperando || voz.escuchando}
             className="size-12 shrink-0 px-0"
           >
             <ArrowUp className="size-[19px]" strokeWidth={2.2} />
@@ -290,7 +430,15 @@ export function ProChat({ db }: { db: DB }) {
   )
 }
 
-function Mensaje({ burbuja, onAplicar }: { burbuja: Burbuja; onAplicar: () => void }) {
+function Mensaje({
+  burbuja,
+  onAplicar,
+  onEscuchar,
+}: {
+  burbuja: Burbuja
+  onAplicar: () => void
+  onEscuchar?: () => void
+}) {
   const propio = burbuja.de === 'usuario'
 
   return (
@@ -303,7 +451,7 @@ function Mensaje({ burbuja, onAplicar }: { burbuja: Burbuja; onAplicar: () => vo
       <div className={cn('max-w-[85%]', propio && 'flex justify-end')}>
         <div
           className={cn(
-            'rounded-card px-4 py-3 text-[14px] leading-relaxed',
+            'whitespace-pre-line rounded-card px-4 py-3 text-[14px] leading-relaxed',
             propio
               ? 'bg-accent text-accent-ink'
               : burbuja.error
@@ -317,15 +465,26 @@ function Mensaje({ burbuja, onAplicar }: { burbuja: Burbuja; onAplicar: () => vo
           {burbuja.texto}
         </div>
 
+        {onEscuchar && (
+          <button
+            type="button"
+            onClick={onEscuchar}
+            className="mt-1 inline-flex min-h-8 items-center gap-1 px-1 text-[11.5px] text-ink-faint transition-colors hover:text-ink"
+          >
+            <Volume2 className="size-3.5" strokeWidth={2} />
+            Escuchar
+          </button>
+        )}
+
         {burbuja.confirmacion && (
           <div className="mt-2 overflow-hidden rounded-card border border-accent-hi/45 bg-accent-dim/25">
             <p className="border-b border-accent-hi/25 px-4 py-2.5 text-[13px] font-semibold text-ink">
               {burbuja.confirmacion.titulo}
             </p>
             <dl className="px-4 py-1">
-              {burbuja.confirmacion.lineas.map((l) => (
+              {burbuja.confirmacion.lineas.map((l, i) => (
                 <div
-                  key={l.etiqueta}
+                  key={`${l.etiqueta}-${i}`}
                   className="flex items-center justify-between gap-4 border-b border-line/60 py-2 last:border-0"
                 >
                   <dt className="text-[12.5px] text-ink-muted">{l.etiqueta}</dt>
@@ -341,13 +500,7 @@ function Mensaje({ burbuja, onAplicar }: { burbuja: Burbuja; onAplicar: () => vo
                   Aplicado al stock
                 </p>
               ) : burbuja.operacion ? (
-                <Button
-                  full
-                  size="md"
-                  confirm
-                  confirmLabel="Aplicado"
-                  onConfirmed={onAplicar}
-                >
+                <Button full size="md" confirm confirmLabel="Aplicado" onConfirmed={onAplicar}>
                   Confirmar y aplicar al stock
                 </Button>
               ) : (
@@ -361,12 +514,7 @@ function Mensaje({ burbuja, onAplicar }: { burbuja: Burbuja; onAplicar: () => vo
             </div>
           </div>
         )}
-
-        {!propio && !burbuja.error && burbuja.confirmacion === undefined && (
-          <div className="mt-1.5" />
-        )}
       </div>
     </motion.div>
   )
 }
-

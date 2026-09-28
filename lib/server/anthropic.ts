@@ -5,11 +5,21 @@ import Anthropic from '@anthropic-ai/sdk'
  *
  * IMPORTANTE: este módulo sólo se importa desde `app/api/**` (código de
  * servidor). La clave nunca viaja al navegador. Si `ANTHROPIC_API_KEY` no está
- * cargada, `clienteIA()` devuelve null y cada endpoint responde con su
- * simulación — la app funciona en Vercel sin ninguna variable de entorno.
+ * cargada, `clienteIA()` devuelve null y cada endpoint lo avisa con un motivo
+ * claro en vez de inventar datos.
  */
 
-export const MODELO = 'claude-opus-5'
+export const MODELO = 'claude-opus-5-5'
+
+/**
+ * Si el filtro de seguridad del modelo rechaza un pedido (pasa muy rara vez,
+ * y a veces con pedidos inocentes), la API lo reintenta sola en el modelo que
+ * Anthropic recomienda para ese caso en vez de devolvernos el rechazo.
+ */
+export const REINTENTO_EN_RECHAZO = {
+  betas: ['server-side-fallback-2026-07-01'],
+  fallbacks: 'default',
+} satisfies Pick<Anthropic.Beta.Messages.MessageCreateParamsNonStreaming, 'betas' | 'fallbacks'>
 
 let cache: Anthropic | null = null
 
@@ -20,9 +30,9 @@ export function clienteIA(): Anthropic | null {
 }
 
 /** Junta los bloques de texto de una respuesta de la Messages API. */
-export function textoDe(mensaje: Anthropic.Message): string {
+export function textoDe(mensaje: Anthropic.Beta.BetaMessage): string {
   return mensaje.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
     .map((b) => b.text)
     .join('\n')
     .trim()
@@ -30,8 +40,8 @@ export function textoDe(mensaje: Anthropic.Message): string {
 
 /**
  * Extrae el primer objeto JSON de un texto.
- * El modelo puede envolver la respuesta en ```json … ```; esto lo tolera sin
- * depender de un formato exacto.
+ * Con salida estructurada el texto ya es JSON puro; esto igual tolera un
+ * ```json … ``` alrededor por si algún día se usa sin esquema.
  */
 export function jsonDe<T>(texto: string): T | null {
   const limpio = texto.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '')
@@ -49,5 +59,34 @@ export function jsonDe<T>(texto: string): T | null {
 export function partirDataUrl(dataUrl: string) {
   const m = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/i.exec(dataUrl)
   if (!m) return null
-  return { mediaType: m[1] as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif', datos: m[2] }
+  return {
+    mediaType: m[1].toLowerCase() as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif',
+    datos: m[2],
+  }
 }
+
+/** Motivo legible (y status HTTP) para una falla al hablar con el modelo. */
+export function motivoDeFalla(error: unknown): { mensaje: string; status: number } {
+  if (error instanceof Anthropic.AuthenticationError || error instanceof Anthropic.PermissionDeniedError) {
+    return {
+      mensaje: 'La clave de IA configurada en el servidor no es válida. Revisá ANTHROPIC_API_KEY en Vercel.',
+      status: 502,
+    }
+  }
+  if (error instanceof Anthropic.RateLimitError) {
+    return { mensaje: 'Hay mucha demanda en este momento. Probá de nuevo en unos segundos.', status: 503 }
+  }
+  if (error instanceof Anthropic.BadRequestError) {
+    return { mensaje: 'La IA no pudo procesar este pedido. Probá con otra foto o reformulalo.', status: 502 }
+  }
+  if (error instanceof Anthropic.APIConnectionError) {
+    return { mensaje: 'El servidor no pudo conectarse con la IA. Probá de nuevo.', status: 503 }
+  }
+  if (error instanceof Anthropic.APIError) {
+    return { mensaje: 'La IA no está disponible en este momento. Probá de nuevo en un rato.', status: 503 }
+  }
+  return { mensaje: 'Algo falló del lado del servidor. Probá de nuevo.', status: 500 }
+}
+
+export const SIN_CLAVE =
+  'La IA todavía no está activada: falta cargar ANTHROPIC_API_KEY en Vercel (Settings → Environment Variables) y volver a desplegar.'

@@ -1,22 +1,60 @@
 import { NextResponse } from 'next/server'
-import { MODELO, clienteIA, jsonDe, textoDe } from '@/lib/server/anthropic'
+import type Anthropic from '@anthropic-ai/sdk'
+import {
+  MODELO,
+  REINTENTO_EN_RECHAZO,
+  clienteIA,
+  jsonDe,
+  motivoDeFalla,
+  textoDe,
+} from '@/lib/server/anthropic'
 
 /**
  * Asistente por chat del plan Comercial.
  *
  * Igual que `/api/vision`: Route Handler serverless, con la clave del lado del
- * servidor y una simulación por reglas cuando no está configurada. La UI del
- * chat no distingue entre las dos: consume siempre esta misma respuesta.
+ * servidor. Recibe la conversación entera (no sólo el último mensaje), así se
+ * puede charlar de verdad: "¿y ayer?", "sumale otra", "¿por qué?" se entienden
+ * por lo que se dijo antes.
+ *
+ * Sin clave configurada responde con un modo básico por reglas y lo marca
+ * como `fuente: 'simulado'`, para que la pantalla avise que la IA no está
+ * activa. Si hay clave y el modelo falla, devuelve el error: nunca cambia en
+ * silencio a respuestas por reglas haciéndolas pasar por la IA.
  */
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
+
+/** Cuántos mensajes previos de la charla se mandan al modelo. */
+const MAX_HISTORIAL = 30
 
 interface Contexto {
   negocio?: string
-  productos?: { id: string; nombre: string; codigo?: string; precio: number; stock: number }[]
+  fecha?: string
+  productos?: {
+    id: string
+    nombre: string
+    codigo?: string
+    categoria?: string
+    precio: number
+    costo?: number
+    stock: number
+    stockMin?: number
+  }[]
   ventasHoy?: number
   ticketsHoy?: number
+  /** Ventas de los últimos días, para preguntas como "¿cómo vengo esta semana?". */
+  ultimosDias?: { dia: string; total: number; tickets: number }[]
+  /** Más vendidos del mes: unidades y facturado. */
+  masVendidosMes?: { nombre: string; unidades: number; facturado: number }[]
+  ventasMes?: number
+}
+
+interface MensajeChat {
+  rol: 'usuario' | 'asistente'
+  texto: string
 }
 
 type MetodoPago = 'efectivo' | 'tarjeta' | 'transferencia'
@@ -83,18 +121,101 @@ function operacionValida(op: unknown, ctx: Contexto): Operacion | undefined {
   return items.length ? { tipo: 'venta', items, metodo } : undefined
 }
 
-const SISTEMA = `Sos el asistente de Rindo, una app de gestión para comercios chicos de San Juan, Argentina.
-Hablás en español rioplatense, en segunda persona ("vos"), en tono directo y breve: dos o tres oraciones como máximo.
+const SISTEMA = `Sos el asistente de Rindo, una app de gestión para comercios chicos de San Juan, Argentina. Charlás con el dueño o el empleado del comercio, que te escribe o te habla por voz desde el celular (los mensajes dictados pueden venir con errores de transcripción: interpretalos con sentido común).
+Hablás en español rioplatense, en segunda persona ("vos"), cálido y directo. Respondés corto (una a cuatro oraciones) porque la respuesta se puede leer en voz alta; si te piden detalle o una lista, podés extenderte un poco. No uses markdown, asteriscos ni viñetas: texto plano.
 
-Devolvés SIEMPRE un único objeto JSON, sin texto alrededor, con esta forma:
-{"texto": string, "confirmacion": {"titulo": string, "lineas": [{"etiqueta": string, "valor": string}]} | null, "operacion": {"tipo": "venta", "items": [{"productoId": string, "cantidad": number}], "metodo": "efectivo" | "tarjeta" | "transferencia"} | null}
+Podés:
+- Registrar ventas de productos del catálogo (con confirmación del usuario).
+- Responder cómo viene el negocio (hoy, la semana, el mes), qué se vende más, stock, qué reponer, márgenes y precios, usando SÓLO los datos del contexto.
+- Charlar y dar consejos prácticos de gestión de un comercio chico.
+Recordás lo que se habló antes en la conversación: "sumale otra", "¿y ayer?", "cambialo a tarjeta" se refieren a lo anterior.
 
-Usás "confirmacion" solamente cuando el usuario pide registrar algo concreto (una venta, una reposición, un gasto): ahí resumís lo entendido en líneas cortas para que lo confirme antes de impactar los datos. Para preguntas de consulta, "confirmacion" va en null.
+Formato de respuesta: "texto" es lo que le decís al usuario.
+Usás "confirmacion" solamente cuando el usuario pide registrar una venta concreta: ahí resumís lo entendido en líneas cortas (Producto, Cantidad, Precio unitario, Total, Método de pago) para que lo confirme antes de impactar los datos. Si la venta tiene varios productos, una línea por producto con "cantidad × precio" y al final Total y Método de pago. Para todo lo demás, "confirmacion" y "operacion" van en null.
+Cuando la operación es una venta, además de "confirmacion" completás "operacion" con el "id" EXACTO de cada producto tal como figura en el contexto y la cantidad como número entero. No inventes ids: si no encontrás el producto en el catálogo, dejá "operacion" en null y preguntá en "texto" cuál es.
+Si el usuario corrige una venta que propusiste antes y todavía no confirmó ("no, eran dos"), devolvé la venta completa corregida.
+Algunos productos traen "codigo", un código corto que el comerciante les asignó (ej. "20" para el Fernet). Si el mensaje menciona un número o código corto (típico al dictar rápido: "20, uno" = un Fernet), priorizá matchear por "codigo" exacto antes que por nombre.
+En "metodo" va cómo pagaron: "tarjeta" para tarjeta/débito/crédito/posnet, "transferencia" para transferencia/QR/Mercado Pago/alias/CBU, "efectivo" para efectivo o si no se menciona.
+Nunca inventás cifras que no estén en el contexto. Si algo no está en los datos, decilo.`
 
-Cuando la operación es una venta de productos del catálogo, además de "confirmacion" completás "operacion" con el "id" EXACTO de cada producto tal como figura en el contexto y la cantidad como número entero. No inventes ids: si no encontrás el producto en el contexto, dejá "operacion" en null y pedí el nombre en "texto".
-Algunos productos del contexto traen "codigo", un código corto que el comerciante les asignó (ej. "20" para el Fernet). Si el mensaje menciona un número o código corto (típico al dictar una venta rápido: "20, uno" = un Fernet), priorizá matchear por "codigo" exacto antes que por nombre — es una señal más confiable, sobre todo si el mensaje viene de una transcripción de audio.
-En "metodo" completás cómo pagaron si el mensaje lo dice: "tarjeta" para tarjeta/débito/crédito/posnet, "transferencia" para transferencia/QR/Mercado Pago/alias/CBU, "efectivo" para efectivo. Si no lo menciona, usá "efectivo" — es lo más común en un mostrador y no hace falta preguntarlo siempre. Reflejá el método elegido como una línea más en "confirmacion" (etiqueta "Método de pago").
-Nunca inventás cifras que no estén en el contexto que te pasan. Si falta un dato para registrar la operación, lo pedís en "texto" y dejás "confirmacion" y "operacion" en null.`
+/** Salida estructurada: la API garantiza que la respuesta cumple el esquema. */
+const ESQUEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['texto', 'confirmacion', 'operacion'],
+  properties: {
+    texto: { type: 'string' },
+    confirmacion: {
+      anyOf: [
+        { type: 'null' },
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['titulo', 'lineas'],
+          properties: {
+            titulo: { type: 'string' },
+            lineas: {
+              type: 'array',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['etiqueta', 'valor'],
+                properties: { etiqueta: { type: 'string' }, valor: { type: 'string' } },
+              },
+            },
+          },
+        },
+      ],
+    },
+    operacion: {
+      anyOf: [
+        { type: 'null' },
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['tipo', 'items', 'metodo'],
+          properties: {
+            tipo: { type: 'string', enum: ['venta'] },
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['productoId', 'cantidad'],
+                properties: { productoId: { type: 'string' }, cantidad: { type: 'integer' } },
+              },
+            },
+            metodo: { type: 'string', enum: METODOS },
+          },
+        },
+      ],
+    },
+  },
+}
+
+/**
+ * Arma la conversación para la Messages API: tiene que empezar con el usuario
+ * y alternar roles. Los datos del negocio van en el ÚLTIMO mensaje, así están
+ * frescos en cada turno y el resto de la charla queda igual entre pedidos.
+ */
+function armarConversacion(historial: MensajeChat[], contexto: Contexto): Anthropic.Beta.BetaMessageParam[] {
+  const mensajes: Anthropic.Beta.BetaMessageParam[] = []
+  for (const m of historial) {
+    const role = m.rol === 'asistente' ? 'assistant' : 'user'
+    if (mensajes.length === 0 && role === 'assistant') continue
+    const previo = mensajes[mensajes.length - 1]
+    if (previo && previo.role === role) {
+      previo.content = `${previo.content as string}\n\n${m.texto}`
+    } else {
+      mensajes.push({ role, content: m.texto })
+    }
+  }
+
+  const ultimo = mensajes[mensajes.length - 1]
+  const datos = `Datos actuales del negocio (JSON):\n${JSON.stringify(contexto).slice(0, 24_000)}`
+  ultimo.content = `${datos}\n\nMensaje del usuario:\n${ultimo.content as string}`
+  return mensajes
+}
 
 const PESOS = (n: number) => `$${n.toLocaleString('es-AR')}`
 
@@ -177,43 +298,60 @@ function simular(mensaje: string, ctx: Contexto): Respuesta {
 }
 
 export async function POST(request: Request) {
-  let cuerpo: { mensaje?: string; contexto?: Contexto }
+  let cuerpo: { mensajes?: MensajeChat[]; mensaje?: string; contexto?: Contexto }
   try {
     cuerpo = await request.json()
   } catch {
     return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 })
   }
 
-  const mensaje = (cuerpo.mensaje ?? '').trim().slice(0, 2000)
+  // `mensaje` suelto queda por compatibilidad con clientes viejos cacheados.
+  const historial: MensajeChat[] = (
+    Array.isArray(cuerpo.mensajes) ? cuerpo.mensajes : cuerpo.mensaje ? [{ rol: 'usuario', texto: cuerpo.mensaje }] : []
+  )
+    .filter(
+      (m): m is MensajeChat =>
+        !!m && (m.rol === 'usuario' || m.rol === 'asistente') && typeof m.texto === 'string' && !!m.texto.trim(),
+    )
+    .map((m) => ({ rol: m.rol, texto: m.texto.trim().slice(0, 2000) }))
+    .slice(-MAX_HISTORIAL)
+
+  const ultimo = historial[historial.length - 1]
+  if (!ultimo || ultimo.rol !== 'usuario') {
+    return NextResponse.json({ error: 'Mensaje vacío' }, { status: 400 })
+  }
   const contexto = cuerpo.contexto ?? {}
-  if (!mensaje) return NextResponse.json({ error: 'Mensaje vacío' }, { status: 400 })
 
   const cliente = clienteIA()
   if (!cliente) {
-    return NextResponse.json({ fuente: 'simulado', ...simular(mensaje, contexto) })
+    return NextResponse.json({ fuente: 'simulado', ...simular(ultimo.texto, contexto) })
   }
 
   try {
-    const respuesta = await cliente.messages.create({
+    const respuesta = await cliente.beta.messages.create({
+      ...REINTENTO_EN_RECHAZO,
       model: MODELO,
-      max_tokens: 4000,
-      output_config: { effort: 'low' },
+      max_tokens: 8000,
+      // Charla de mostrador: la velocidad pesa más que el razonamiento largo,
+      // sobre todo cuando la respuesta se escucha en voz alta.
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: ESQUEMA } },
       system: SISTEMA,
-      messages: [
-        {
-          role: 'user',
-          content: `Contexto del negocio (JSON):\n${JSON.stringify(contexto).slice(0, 6000)}\n\nMensaje del comerciante:\n${mensaje}`,
-        },
-      ],
+      messages: armarConversacion(historial, contexto),
     })
 
     if (respuesta.stop_reason === 'refusal') {
-      return NextResponse.json({ fuente: 'simulado', ...simular(mensaje, contexto) })
+      return NextResponse.json({
+        fuente: 'ia',
+        texto: 'Eso no te lo puedo responder. ¿Te ayudo con algo del negocio?',
+      })
     }
 
     const datos = jsonDe<Respuesta>(textoDe(respuesta))
     if (!datos?.texto) {
-      return NextResponse.json({ fuente: 'simulado', ...simular(mensaje, contexto) })
+      return NextResponse.json(
+        { error: 'El asistente no pudo armar una respuesta. Probá de nuevo.' },
+        { status: 502 },
+      )
     }
 
     return NextResponse.json({
@@ -224,6 +362,7 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error('[asistente]', error)
-    return NextResponse.json({ fuente: 'simulado', ...simular(mensaje, contexto) })
+    const { mensaje, status } = motivoDeFalla(error)
+    return NextResponse.json({ error: mensaje }, { status })
   }
 }

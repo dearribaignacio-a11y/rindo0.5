@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Camera, Images, Loader2, ScanLine, Sparkles } from 'lucide-react'
+import { Camera, Images, Loader2, RotateCcw, ScanLine, Sparkles } from 'lucide-react'
 import { Sheet } from '@/components/ui/Sheet'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/Toast'
 import { addMovimiento } from '@/lib/storage'
 import { hoyISO, money } from '@/lib/format'
 import { leerComprobante, type ItemDetectado } from '@/lib/vision'
+import { comprimirFoto } from '@/lib/imagen'
 import { cn } from '@/lib/cn'
 import type { Categoria } from '@/lib/types'
 
@@ -46,7 +47,8 @@ export function TicketSheet({
   const [comercio, setComercio] = useState('')
   const [total, setTotal] = useState<number | null>(null)
   const [categoriaId, setCategoriaId] = useState('')
-  const [simulado, setSimulado] = useState(false)
+  /** Fecha impresa en el ticket, si se leyó y es creíble. */
+  const [fecha, setFecha] = useState<string>()
   /** Motivo por el que la foto no se pudo leer, si pasó. */
   const [errorLectura, setErrorLectura] = useState<string>()
 
@@ -58,7 +60,8 @@ export function TicketSheet({
     setItems([])
     setComercio('')
     setTotal(null)
-    setSimulado(false)
+    setFecha(undefined)
+    setErrorLectura(undefined)
   }, [open])
 
   useEffect(() => {
@@ -70,18 +73,29 @@ export function TicketSheet({
 
   async function procesar(file?: File) {
     if (!file) return
-    const dataUrl = await comprimir(file)
+    const dataUrl = await comprimirFoto(file)
+    if (!dataUrl) {
+      toast('No pudimos abrir esa imagen. Probá sacando la foto con la cámara.', 'aviso')
+      return
+    }
     setFoto(dataUrl)
     setEtapa('leyendo')
 
     const res = await leerComprobante(dataUrl, 'ticket')
-    setSimulado(res.fuente === 'simulado')
     setErrorLectura(res.error)
     setItems(res.datos.items)
     setComercio(res.datos.comercio ?? '')
+    setFecha(fechaCreible(res.datos.fecha))
     const sumado = res.datos.items.reduce((s, i) => s + i.costo * i.cantidad, 0)
     setTotal(res.datos.total ?? (sumado > 0 ? sumado : null))
     setEtapa('confirmar')
+  }
+
+  function otraFoto() {
+    setEtapa('captura')
+    setFoto(undefined)
+    setItems([])
+    setErrorLectura(undefined)
   }
 
   function guardar() {
@@ -91,7 +105,7 @@ export function TicketSheet({
       monto: total,
       categoriaId: categoriaId || categorias[0]?.id || '',
       descripcion: comercio.trim() || 'Compra con ticket',
-      fecha: hoyISO(),
+      fecha: fecha ?? hoyISO(),
       autorId: miembroId,
       origen: 'ticket',
     })
@@ -187,45 +201,48 @@ export function TicketSheet({
             </div>
           </div>
 
-          {errorLectura ? (
-            <p className="rounded-[10px] border border-warn/40 bg-warn-dim px-3 py-2 text-[12.5px] leading-relaxed text-warn">
-              {errorLectura}
-            </p>
-          ) : (
-            simulado && (
-              <p className="text-[12px] leading-relaxed text-ink-faint">
-                Lectura de ejemplo: todavía no hay una clave de IA configurada en el servidor. Podés
-                editar todo a mano igual.
-              </p>
-            )
+          {errorLectura && (
+            <div className="rounded-[10px] border border-warn/40 bg-warn-dim px-3 py-2.5">
+              <p className="text-[12.5px] leading-relaxed text-warn">{errorLectura}</p>
+              <button
+                type="button"
+                onClick={otraFoto}
+                className="mt-1.5 inline-flex min-h-9 items-center gap-1.5 text-[12.5px] font-medium text-ink transition-colors hover:text-accent-hi"
+              >
+                <RotateCcw className="size-3.5" strokeWidth={2} />
+                Probar con otra foto
+              </button>
+            </div>
           )}
 
-          <Field label={`Renglones detectados (${items.length})`}>
-            <div className="space-y-1.5">
-              {items.map((item, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    'flex items-center gap-2 rounded-xl border px-3 py-2',
-                    item.confiable ? 'border-line bg-surface-2' : 'border-warn/45 bg-warn-dim',
-                  )}
-                >
-                  <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{item.nombre}</span>
-                  <span className="tabular shrink-0 text-[12px] text-ink-faint">
-                    ×{item.cantidad}
-                  </span>
-                  <span className="tabular shrink-0 text-[13px] font-medium text-ink">
-                    {money(item.costo * item.cantidad)}
-                  </span>
-                </div>
-              ))}
-              {items.some((i) => !i.confiable) && (
-                <p className="pt-1 text-[12px] text-warn">
-                  Los renglones en amarillo no se leyeron bien. Ajustá el total si hace falta.
-                </p>
-              )}
-            </div>
-          </Field>
+          {items.length > 0 && (
+            <Field label={`Renglones detectados (${items.length})`}>
+              <div className="space-y-1.5">
+                {items.map((item, i) => (
+                  <div
+                    key={i}
+                    className={cn(
+                      'flex items-center gap-2 rounded-xl border px-3 py-2',
+                      item.confiable ? 'border-line bg-surface-2' : 'border-warn/45 bg-warn-dim',
+                    )}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{item.nombre}</span>
+                    <span className="tabular shrink-0 text-[12px] text-ink-faint">
+                      ×{item.cantidad}
+                    </span>
+                    <span className="tabular shrink-0 text-[13px] font-medium text-ink">
+                      {money(item.costo * item.cantidad)}
+                    </span>
+                  </div>
+                ))}
+                {items.some((i) => !i.confiable) && (
+                  <p className="pt-1 text-[12px] text-warn">
+                    Los renglones en amarillo no se leyeron bien. Ajustá el total si hace falta.
+                  </p>
+                )}
+              </div>
+            </Field>
+          )}
 
           <MoneyInput label="Total del ticket" value={total} onChange={setTotal} />
 
@@ -263,7 +280,7 @@ export function TicketSheet({
             </div>
           </Field>
 
-          {categoria && (
+          {categoria && !errorLectura && (
             <div className="flex items-center gap-2">
               <Badge tone="accent" icon={Sparkles}>
                 Detectado automáticamente
@@ -277,27 +294,14 @@ export function TicketSheet({
   )
 }
 
-/** Reduce la foto antes de mandarla: una imagen de cámara son varios MB. */
-async function comprimir(file: File, lado = 1280): Promise<string> {
-  const dataUrl = await new Promise<string>((res) => {
-    const lector = new FileReader()
-    lector.onload = () => res(String(lector.result))
-    lector.readAsDataURL(file)
-  })
-
-  return new Promise((res) => {
-    const img = new Image()
-    img.onload = () => {
-      const escala = Math.min(1, lado / Math.max(img.width, img.height))
-      const canvas = document.createElement('canvas')
-      canvas.width = Math.round(img.width * escala)
-      canvas.height = Math.round(img.height * escala)
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return res(dataUrl)
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      res(canvas.toDataURL('image/jpeg', 0.82))
-    }
-    img.onerror = () => res(dataUrl)
-    img.src = dataUrl
-  })
+/**
+ * La fecha impresa en el ticket, sólo si es creíble: no futura y de los
+ * últimos 60 días. Un año mal leído ("2062") no puede mandar el gasto a otro
+ * mes; en ese caso va con la fecha de hoy.
+ */
+function fechaCreible(fecha: string | null): string | undefined {
+  if (!fecha) return undefined
+  const hoy = hoyISO()
+  const limite = new Date(Date.now() - 60 * 86_400_000).toISOString().slice(0, 10)
+  return fecha <= hoy && fecha >= limite ? fecha : undefined
 }

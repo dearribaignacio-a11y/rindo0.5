@@ -37,19 +37,33 @@ Para eso Vercel necesita `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project
 Settings → API Keys → `service_role`). Sin esa variable la app vuelve al alta
 clásica con correo de confirmación.
 
-### Variable opcional: `ANTHROPIC_API_KEY`
+### Variable para la IA: `ANTHROPIC_API_KEY`
 
-Los dos Route Handlers que hablan con un modelo
-(`app/api/vision/route.ts` y `app/api/asistente/route.ts`) funcionan en dos modos:
+Los dos Route Handlers que hablan con el modelo (Claude Opus 5.5)
+(`app/api/vision/route.ts` y `app/api/asistente/route.ts`) necesitan esta clave:
 
-| `ANTHROPIC_API_KEY` | Comportamiento |
-|---|---|
-| sin cargar | Devuelven una detección/respuesta simulada coherente. La interfaz es idéntica y completamente usable. |
-| cargada | Leen la foto del ticket o de la factura de verdad y responden el chat con el modelo. |
+| `ANTHROPIC_API_KEY` | Fotos de tickets y facturas | Asistente (chat y voz) |
+|---|---|---|
+| sin cargar | No se leen: la pantalla avisa que falta la clave y deja cargar a mano. **Nunca** se muestran datos de ejemplo como si fueran la foto. | Modo básico por reglas (anotar una venta simple, cuánto vendí hoy, stock), con un aviso visible. |
+| cargada | Lee la foto de verdad. En facturas, además asocia cada renglón con el producto del catálogo para sumar stock en vez de duplicarlo. | Charla real con memoria de la conversación, sobre ventas, stock, márgenes y más vendidos. |
 
 Para activarlo: en Vercel, **Settings → Environment Variables → Add**, nombre
-`ANTHROPIC_API_KEY`, valor tu clave, y redeploy. La clave vive sólo del lado del
-servidor (`lib/server/anthropic.ts`), nunca se incluye en el bundle del cliente.
+`ANTHROPIC_API_KEY`, valor tu clave (se crea en console.anthropic.com), y
+**redeploy**. La clave vive sólo del lado del servidor (`lib/server/anthropic.ts`),
+nunca se incluye en el bundle del cliente. Si la clave es inválida o el
+proveedor falla, la app muestra el motivo en vez de inventar una respuesta.
+
+Los dos handlers declaran `maxDuration = 60`: leer una foto puede tardar más
+que los 10 segundos que Vercel da por defecto en algunos proyectos.
+
+### Voz
+
+- **Hablarle al asistente**: dictado con la Web Speech API del navegador
+  (`lib/voz.ts`), en `es-AR`, sin costo ni servidor. Anda en Chrome/Android y
+  en Safari de iPhone; en Firefox el botón de micrófono no aparece.
+- **Que el asistente responda hablando**: `speechSynthesis` del navegador. Las
+  respuestas a mensajes dictados se leen en voz alta; se puede silenciar desde
+  el ícono de parlante del chat, y cada respuesta tiene un botón "Escuchar".
 
 ## Por qué Next.js y no un servidor propio
 
@@ -74,7 +88,7 @@ app/
   globals.css          tokens de diseño y variantes de tema
   page.tsx             monta el shell del cliente
   api/vision/          lectura de tickets y facturas por foto
-  api/asistente/       chat del asistente comercial
+  api/asistente/       chat del asistente comercial (con memoria de la charla)
 components/            sistema de diseño (ui/) + piezas de dominio
 screens/               una pantalla por archivo, agrupadas por plan
 lib/
