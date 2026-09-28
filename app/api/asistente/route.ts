@@ -106,38 +106,79 @@ function detectarMetodo(texto: string): MetodoPago {
   return 'efectivo'
 }
 
+const UNIDADES: Record<string, number> = {
+  cero: 0, un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5,
+  seis: 6, siete: 7, ocho: 8, nueve: 9,
+}
+const ESPECIALES: Record<string, number> = {
+  diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15,
+  dieciseis: 16, dieciséis: 16, diecisiete: 17, dieciocho: 18, diecinueve: 19,
+  veinte: 20, veintiun: 21, veintiuno: 21, veintiuna: 21, veintidos: 22, veintidós: 22,
+  veintitres: 23, veintitrés: 23, veinticuatro: 24, veinticinco: 25,
+  veintiseis: 26, veintiséis: 26, veintisiete: 27, veintiocho: 28, veintinueve: 29,
+}
+const DECENAS: Record<string, number> = {
+  treinta: 30, cuarenta: 40, cincuenta: 50, sesenta: 60, setenta: 70, ochenta: 80, noventa: 90,
+}
+
+/** Convierte números dichos como palabra ("tres", "veinte") a dígitos — el
+ *  habla a texto de Android casi siempre transcribe los números chicos como
+ *  palabras, nunca como cifras, y sin esto el resto del reconocimiento de
+ *  código/cantidad no tenía ningún dígito para encontrar. Cubre 0-99, de
+ *  sobra para un código de hasta 3 cifras dictado con alguna palabra. */
+function palabrasANumeros(texto: string): string {
+  let normalizado = texto.replace(
+    /\b(treinta|cuarenta|cincuenta|sesenta|setenta|ochenta|noventa)\s+y\s+(un|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)\b/g,
+    (_, decena: string, unidad: string) => String(DECENAS[decena] + UNIDADES[unidad]),
+  )
+  normalizado = normalizado.replace(/\b[a-záéíóúñ]+\b/g, (palabra) => {
+    if (palabra in ESPECIALES) return String(ESPECIALES[palabra])
+    if (palabra in DECENAS) return String(DECENAS[palabra])
+    if (palabra in UNIDADES) return String(UNIDADES[palabra])
+    return palabra
+  })
+  return normalizado
+}
+
 /**
  * Busca el producto y la cantidad que menciona el mensaje. Un mensaje puede
  * traer dos números a la vez (cantidad y código: "vendí 3 del 1"), así que
  * primero se busca una marca explícita ("del 1", "código 1", "cod 1", "#1")
  * que diga sin ambigüedad cuál de los dos números es el código — el resto de
- * los números del mensaje quedan libres para ser la cantidad. Sin esa marca,
- * se prueba cada número contra los códigos existentes (para "vendí el 20"
- * sin más) y recién si ninguno matchea se cae a buscar por la primera
- * palabra del nombre.
+ * los números quedan libres para ser la cantidad. La marca se busca sobre el
+ * texto con los números-palabra ya convertidos ("del tres" → "del 3"), porque
+ * la palabra "del"/"código" ya saca la ambigüedad.
+ *
+ * Sin marca, el escaneo de números contra los códigos existentes usa sólo
+ * los dígitos que YA eran dígitos en el mensaje original — un número dicho
+ * como palabra suelta ("vendí dos gaseosas") es casi siempre una cantidad,
+ * no un código, y tratarlo como código rompería ese caso mucho más común que
+ * el de dictar el código sin decir la palabra "código"/"del" antes.
  */
 function buscarProductoYCantidad(texto: string, productos: Contexto['productos']) {
-  const numeros = texto.match(/\d+/g) ?? []
+  const textoNumerico = palabrasANumeros(texto)
+  const numerosConvertidos = textoNumerico.match(/\d+/g) ?? []
+  const numerosOriginales = texto.match(/\d+/g) ?? []
 
-  const marca = /(?:c[oó]digo|cod\.?|del|#)\s*(\d+)/.exec(texto)
+  const marca = /(?:c[oó]digo|cod\.?|del|#)\s*(\d+)/.exec(textoNumerico)
   if (marca) {
     const producto = productos?.find((p) => p.codigo === marca[1])
     if (producto) {
-      const resto = numeros.filter((n) => n !== marca[1])
+      const resto = numerosConvertidos.filter((n) => n !== marca[1])
       return { producto, cantidad: Number(resto[0] ?? 1) }
     }
   }
 
-  for (const n of numeros) {
+  for (const n of numerosOriginales) {
     const producto = productos?.find((p) => p.codigo && p.codigo === n)
     if (producto) {
-      const resto = numeros.filter((x) => x !== n)
+      const resto = numerosOriginales.filter((x) => x !== n)
       return { producto, cantidad: Number(resto[0] ?? 1) }
     }
   }
 
   const producto = productos?.find((p) => texto.includes(p.nombre.toLowerCase().split(' ')[0]))
-  return { producto, cantidad: Number(numeros[0] ?? 1) }
+  return { producto, cantidad: Number(numerosConvertidos[0] ?? 1) }
 }
 
 /**
