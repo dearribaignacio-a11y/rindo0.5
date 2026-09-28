@@ -25,6 +25,18 @@ npm start        # servir el build
 **No hacen falta variables de entorno para el MVP.** La app arranca y funciona
 completa sin ninguna clave configurada.
 
+### Registro sin correo de confirmación: `SUPABASE_SERVICE_ROLE_KEY`
+
+Las cuentas nuevas se crean ya confirmadas desde el servidor
+(`app/auth/registro`), así nadie depende del correo de confirmación de
+Supabase, que en el plan gratuito casi nunca llega. Las cuentas que quedaron
+sin confirmar se confirman solas la próxima vez que inician sesión
+(`app/auth/confirmar-cuenta`).
+
+Para eso Vercel necesita `SUPABASE_SERVICE_ROLE_KEY` (Supabase → Project
+Settings → API Keys → `service_role`). Sin esa variable la app vuelve al alta
+clásica con correo de confirmación.
+
 ### Variable opcional: `ANTHROPIC_API_KEY`
 
 Los dos Route Handlers que hablan con un modelo

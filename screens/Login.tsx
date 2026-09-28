@@ -10,6 +10,8 @@ import { Segmented } from '@/components/ui/Segmented'
 import { Sheet } from '@/components/ui/Sheet'
 import { createClient } from '@/lib/supabase/client'
 import { mapAuthError } from '@/lib/supabase/errores'
+import { reenviarConfirmacion } from '@/lib/supabase/reenviar'
+import { confirmarPendiente } from '@/lib/supabase/alta'
 import { PASS_MIN, emailValido, errorPassword } from '@/lib/validacion'
 import type { PlanId } from '@/lib/types'
 
@@ -54,6 +56,9 @@ export function Login({
   const [errores, setErrores] = useState<Errores>({})
   const [cargando, setCargando] = useState<'sesion' | null>(null)
   const [recuperando, setRecuperando] = useState(false)
+  /** El login falló porque la cuenta existe pero falta confirmar el email. */
+  const [sinConfirmar, setSinConfirmar] = useState(false)
+  const [reenvio, setReenvio] = useState<'enviando' | 'enviado' | null>(null)
 
   const refEmail = useRef<HTMLInputElement>(null)
   const refPass = useRef<HTMLInputElement>(null)
@@ -96,15 +101,34 @@ export function Login({
 
     setCargando('sesion')
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    let { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    // Cuentas creadas cuando todavía se pedía confirmar el correo: se
+    // confirman por servidor y se reintenta el login una vez.
+    if (error?.message.toLowerCase().includes('email not confirmed') && (await confirmarPendiente(email))) {
+      ;({ error } = await supabase.auth.signInWithPassword({ email, password }))
+    }
     setCargando(null)
 
     if (error) {
       setErrores({ general: mapAuthError(error) })
+      setSinConfirmar(error.message.toLowerCase().includes('email not confirmed'))
+      setReenvio(null)
       return
     }
 
     onIngreso()
+  }
+
+  async function reenviar() {
+    setReenvio('enviando')
+    const error = await reenviarConfirmacion(email)
+    if (error) {
+      setErrores({ general: mapAuthError(error) })
+      setReenvio(null)
+      return
+    }
+    setReenvio('enviado')
   }
 
   return (
@@ -228,6 +252,19 @@ export function Login({
               <p className="rounded-input border border-neg/40 bg-neg-dim px-3.5 py-2.5 text-[13px] leading-relaxed text-neg">
                 {errores.general}
               </p>
+            )}
+
+            {errores.general && sinConfirmar && modo === 'ingresar' && (
+              <Button
+                full
+                variant="secondary"
+                size="md"
+                loading={reenvio === 'enviando'}
+                disabled={reenvio === 'enviado'}
+                onClick={reenviar}
+              >
+                {reenvio === 'enviado' ? 'Correo reenviado' : 'Reenviar correo de confirmación'}
+              </Button>
             )}
 
             <Button full size="lg" type="submit" loading={cargando === 'sesion'}>
