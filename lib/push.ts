@@ -24,6 +24,24 @@ export function soportaNotificaciones(): boolean {
   )
 }
 
+/** iPhone/iPad — incluye el iPad moderno, que desde iOS 13 se identifica
+ *  como "MacIntel" en el user agent pero tiene pantalla táctil (una Mac de
+ *  verdad no). */
+function esIOS(): boolean {
+  if (typeof navigator === 'undefined') return false
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+}
+
+/** true si la app ya se abrió como instalada (agregada a la pantalla de
+ *  inicio), no como una pestaña más de Safari/Chrome. `standalone` es la
+ *  propiedad específica de iOS; el resto de los navegadores usan el media
+ *  query de abajo. */
+function esStandalone(): boolean {
+  if (typeof window === 'undefined') return false
+  const iosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone
+  return window.matchMedia('(display-mode: standalone)').matches || iosStandalone === true
+}
+
 /** Registra el service worker — necesario tanto para poder instalar la app
  *  como para recibir notificaciones. Se llama una vez al cargar cualquier
  *  pantalla (ver `components/PwaRegistro.tsx`), no hace falta pedir permiso
@@ -46,6 +64,19 @@ export async function suscripcionActual(): Promise<PushSubscription | null> {
 
 /** Pide permiso y activa las notificaciones en este dispositivo. */
 export async function activarNotificaciones(): Promise<{ ok: boolean; error?: string }> {
+  // En iPhone/iPad, Apple sólo deja recibir notificaciones si la app ya está
+  // agregada a la pantalla de inicio y se abrió desde ahí — abierta en una
+  // pestaña normal de Safari, ni siquiera existe la API. Este chequeo va
+  // antes que `soportaNotificaciones()` porque es un caso más específico y
+  // el error tiene que decir qué hacer, no sólo que "no funciona".
+  if (esIOS() && !esStandalone()) {
+    return {
+      ok: false,
+      error:
+        'En iPhone hay que agregar Rindo a la pantalla de inicio primero: tocá Compartir y "Agregar a inicio", y abrila desde ese ícono.',
+    }
+  }
+
   if (!soportaNotificaciones()) {
     return { ok: false, error: 'Tu navegador no soporta notificaciones.' }
   }
