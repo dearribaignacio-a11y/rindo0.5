@@ -12,8 +12,7 @@ import { BottomBar } from '@/components/ui/BottomBar'
 import { ANTIGUEDADES, RANGOS_EMPLEADOS, RUBROS } from '@/lib/seed'
 import { PLANES } from '@/lib/plans'
 import { cn } from '@/lib/cn'
-import { createClient } from '@/lib/supabase/client'
-import { mapAuthError } from '@/lib/supabase/errores'
+import { crearCuenta } from '@/lib/supabase/alta'
 import { planADB } from '@/lib/supabase/types'
 import { sembrar, updateFlags } from '@/lib/storage'
 import type { Perfil, PlanId } from '@/lib/types'
@@ -107,28 +106,17 @@ export function SetupWizard({
     const nombreApellido = comercial ? nombre.trim() || 'Dueño/a' : nombre.trim()
 
     setGuardando(true)
-    const supabase = createClient()
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        // El plan gratuito de Supabase no deja personalizar el HTML del
-        // email de confirmación, así que usamos el link por defecto y lo
-        // hacemos aterrizar en nuestro propio callback (ver
-        // `app/auth/callback/page.tsx`) en vez del template.
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-        data: {
-          nombre_apellido: nombreApellido,
-          nombre_negocio: comercial ? negocio.trim() : null,
-          telefono: telefono.trim(),
-          plan: planADB(plan),
-        },
-      },
-    })
+    const datos = {
+      nombre_apellido: nombreApellido,
+      nombre_negocio: comercial ? negocio.trim() : null,
+      telefono: telefono.trim(),
+      plan: planADB(plan),
+    }
+    const resultado = await crearCuenta(email, password, datos)
 
-    if (signUpError) {
+    if (resultado.error) {
       setGuardando(false)
-      setError(mapAuthError(signUpError))
+      setError(resultado.error)
       return
     }
 
@@ -168,7 +156,7 @@ export function SetupWizard({
     sembrar(perfil)
     updateFlags({ sesionIniciada: true, setupHecho: true })
 
-    onCreada(!data.session)
+    onCreada(!resultado.conSesion)
   }
 
   function retroceder() {
