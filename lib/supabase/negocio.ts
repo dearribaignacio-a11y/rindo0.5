@@ -57,6 +57,8 @@ export interface PerfilRemoto {
   suscripcionActiva: boolean
   /** ISO corto: hasta cuándo está pagado el plan actual (planes pagos). */
   proximoCobro?: string
+  /** true si hubo al menos un cobro real aprobado — ver `Perfil.pagoAlgunaVez`. */
+  pagoAlgunaVez: boolean
   email: string
 }
 
@@ -75,6 +77,7 @@ export async function fetchPerfilRemoto(): Promise<PerfilRemoto | null> {
     plan: planDesdeDB(data.plan),
     suscripcionActiva: data.suscripcion_activa,
     proximoCobro: data.proximo_cobro ?? undefined,
+    pagoAlgunaVez: Boolean(data.mp_ultimo_pago_id),
     email: user.email ?? '',
   }
 }

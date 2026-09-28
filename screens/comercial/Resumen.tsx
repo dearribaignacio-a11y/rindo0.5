@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Camera, Landmark, PackageSearch, PencilLine, Receipt, TrendingUp } from 'lucide-react'
+import { Camera, Landmark, PackageSearch, PencilLine, Receipt, Sparkles, TrendingUp } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { BarChart } from '@/components/ui/BarChart'
 import { Screen, SectionTitle } from '@/components/ui/Screen'
@@ -12,12 +12,14 @@ import { VentaSheet } from '@/components/comercial/VentaSheet'
 import { AbrirCajaSheet } from '@/components/comercial/AbrirCajaSheet'
 import { useNav } from '@/components/nav'
 import { rankingProductos, stockCritico, ticketPromedio, totalVentas, ventasDelDia, ventasPorHora } from '@/lib/calc'
-import { hora, hoyISO, money, moneyCorto } from '@/lib/format'
+import { fechaCorta, hora, hoyISO, money, moneyCorto } from '@/lib/format'
+import { enPruebaGratis } from '@/lib/plans'
 import type { DB } from '@/lib/types'
 
 export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => void }) {
   const nav = useNav()
   const [sheet, setSheet] = useState<'ninguno' | 'venta' | 'caja'>('ninguno')
+  const enPrueba = enPruebaGratis(db.perfil)
 
   const hoy = hoyISO()
   const ventasHoy = ventasDelDia(db.ventas, hoy)
@@ -45,6 +47,23 @@ export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => v
           </div>
           <Avatar nombre={negocio} src={db.perfil?.logo} />
         </header>
+
+        {enPrueba && db.perfil?.proximoCobro && (
+          <Card
+            interactive
+            onClick={() => nav.push('planes')}
+            className="mb-4 flex items-center gap-3 border-accent-hi/40 bg-accent-dim/20"
+          >
+            <IconChip icon={Sparkles} size="sm" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[13.5px] font-medium text-ink">Estás probando Comercial Pro gratis</p>
+              <p className="mt-0.5 text-[12px] text-ink-faint">
+                Termina el {fechaCorta(db.perfil.proximoCobro)} — después elegís si seguís pagando o
+                pasás al plan Hogar, gratis.
+              </p>
+            </div>
+          </Card>
+        )}
 
         <Card className="p-5">
           <p className="text-[13px] font-medium text-ink-muted">Ventas de hoy</p>

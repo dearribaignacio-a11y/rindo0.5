@@ -113,6 +113,14 @@ export function cuentaBloqueada(perfil: Perfil | null): boolean {
   return esComercial(perfil.plan) && !perfil.suscripcionActiva
 }
 
+/** true si la cuenta está en el mes gratis de Comercial Pro (activa, nunca
+ *  pagó todavía) — se usa para avisar en la app que el período es de prueba,
+ *  en vez de mostrarlo igual que un plan pago cualquiera. */
+export function enPruebaGratis(perfil: Perfil | null): boolean {
+  if (!perfil) return false
+  return esComercial(perfil.plan) && perfil.suscripcionActiva && !perfil.pagoAlgunaVez
+}
+
 /** Precio total por pagar `meses` de un plan de una sola vez. 12 meses usa
  *  el precio anual ya con descuento ("2 meses gratis"); cualquier otra
  *  cantidad es lineal (precio mensual × meses) — pagar varios meses juntos

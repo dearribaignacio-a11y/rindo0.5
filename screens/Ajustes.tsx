@@ -29,10 +29,11 @@ import { Select } from '@/components/ui/Field'
 import { useToast } from '@/components/ui/Toast'
 import { AdSlot } from '@/components/AdSlot'
 import { useNav } from '@/components/nav'
-import { PLANES, esComercial } from '@/lib/plans'
+import { PLANES, esComercial, enPruebaGratis } from '@/lib/plans'
 import { cambiarPlan, resetDB, updateAjustes, updateFlags } from '@/lib/storage'
 import { createClient } from '@/lib/supabase/client'
 import { TEMAS } from '@/lib/temas'
+import { fechaCorta } from '@/lib/format'
 import { cn } from '@/lib/cn'
 import type { DB } from '@/lib/types'
 
@@ -58,6 +59,7 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
   const plan = perfil?.plan ?? 'hogar'
   const esHogar = plan === 'hogar'
   const comercial = esComercial(plan)
+  const enPrueba = enPruebaGratis(perfil)
   const tema = TEMAS.find((t) => t.id === db.ajustes.tema) ?? TEMAS[0]
 
   return (
@@ -86,7 +88,7 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
               Editar perfil
             </button>
           </div>
-          <Badge tone="accent">{PLANES[plan].nombre}</Badge>
+          <Badge tone="accent">{enPrueba ? `${PLANES[plan].nombre} · Prueba gratis` : PLANES[plan].nombre}</Badge>
         </Card>
 
         <SectionTitle>Preferencias</SectionTitle>
@@ -139,7 +141,11 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
           <Fila
             icon={<CreditCard className="size-[18px]" strokeWidth={1.9} />}
             label="Cambiar plan"
-            valor={PLANES[plan].nombre}
+            valor={
+              enPrueba && perfil?.proximoCobro
+                ? `Prueba gratis hasta el ${fechaCorta(perfil.proximoCobro)}`
+                : PLANES[plan].nombre
+            }
             onClick={() => nav.push('planes')}
           />
           {esHogar && (

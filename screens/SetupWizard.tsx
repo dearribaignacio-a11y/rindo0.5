@@ -146,6 +146,7 @@ export function SetupWizard({
           plan,
           suscripcionActiva: true,
           proximoCobro: proximoCobro.toISOString().slice(0, 10),
+          pagoAlgunaVez: false,
           moneda,
           negocio: negocio.trim(),
           rubro,

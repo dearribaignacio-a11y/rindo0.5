@@ -165,6 +165,7 @@ export async function hidratarPerfil() {
           plan: remoto.plan,
           suscripcionActiva: remoto.suscripcionActiva,
           proximoCobro: remoto.proximoCobro,
+          pagoAlgunaVez: remoto.pagoAlgunaVez,
         }
       : {
           nombre: remoto.nombre,
@@ -172,6 +173,7 @@ export async function hidratarPerfil() {
           plan: remoto.plan,
           suscripcionActiva: remoto.suscripcionActiva,
           proximoCobro: remoto.proximoCobro,
+          pagoAlgunaVez: remoto.pagoAlgunaVez,
           moneda: 'ARS',
           negocio: remoto.negocio,
         },

@@ -34,6 +34,11 @@ export interface Perfil {
    *  tiene sentido en planes pagos — se usa para prorratear un cambio de
    *  plan a mitad de período (ver `diferenciaProrrateada` en lib/plans.ts). */
   proximoCobro?: string
+  /** true si esta cuenta alguna vez pagó un plan de verdad (hubo al menos un
+   *  cobro aprobado por Mercado Pago). Una cuenta comercial activa que
+   *  todavía está en `false` está en el mes gratis de prueba, no pagando —
+   *  ver `enPruebaGratis` en lib/plans.ts. */
+  pagoAlgunaVez?: boolean
   moneda: string
   /* Hogar */
   integrantes?: number
