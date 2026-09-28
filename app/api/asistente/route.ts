@@ -106,6 +106,19 @@ function detectarMetodo(texto: string): MetodoPago {
   return 'efectivo'
 }
 
+/** Busca el producto que menciona el mensaje: prioriza un código corto
+ *  exacto (más confiable, sobre todo si el mensaje viene de una
+ *  transcripción de audio) y, si ninguno de los números del mensaje matchea
+ *  un código, cae a buscar por la primera palabra del nombre. */
+function buscarProducto(texto: string, productos: Contexto['productos']) {
+  const numeros = texto.match(/\d+/g) ?? []
+  for (const n of numeros) {
+    const porCodigo = productos?.find((p) => p.codigo && p.codigo === n)
+    if (porCodigo) return porCodigo
+  }
+  return productos?.find((p) => texto.includes(p.nombre.toLowerCase().split(' ')[0]))
+}
+
 /**
  * Simulación por reglas. Cubre los tres pedidos más frecuentes del mostrador:
  * registrar una venta, preguntar cuánto se vendió y consultar stock.
@@ -114,8 +127,14 @@ function simular(mensaje: string, ctx: Contexto): Respuesta {
   const texto = mensaje.toLowerCase()
   const productos = ctx.productos ?? []
 
-  const nombrado = productos.find((p) => texto.includes(p.nombre.toLowerCase().split(' ')[0]))
-  const cantidad = Number(/(\d+)/.exec(texto)?.[1] ?? 1)
+  const nombrado = buscarProducto(texto, productos)
+  // Si el producto se encontró por código, ese número no cuenta como
+  // cantidad — si no, "vendí 20" (código del Fernet) anotaría 20 unidades
+  // en vez de 1. La cantidad sale del primer número que no sea el código.
+  const numeros = texto.match(/\d+/g) ?? []
+  const cantidad = Number(
+    (nombrado?.codigo ? numeros.find((n) => n !== nombrado.codigo) : numeros[0]) ?? 1,
+  )
   const metodo = detectarMetodo(texto)
 
   /* La consulta va ANTES de la venta a propósito. "¿Cuánto vendí hoy?"
