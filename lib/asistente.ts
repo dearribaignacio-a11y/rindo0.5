@@ -25,15 +25,36 @@ export interface Operacion {
 
 export interface ContextoAsistente {
   negocio?: string
-  productos?: { id: string; nombre: string; codigo?: string; precio: number; stock: number }[]
+  /** Fecha y hora local del comercio, para que "hoy" y "ayer" sean los de acá. */
+  fecha?: string
+  productos?: {
+    id: string
+    nombre: string
+    codigo?: string
+    categoria?: string
+    precio: number
+    costo?: number
+    stock: number
+    stockMin?: number
+  }[]
   ventasHoy?: number
   ticketsHoy?: number
+  ultimosDias?: { dia: string; total: number; tickets: number }[]
+  masVendidosMes?: { nombre: string; unidades: number; facturado: number }[]
+  ventasMes?: number
+}
+
+/** Un mensaje previo de la conversación, para que el asistente tenga memoria. */
+export interface MensajeHistorial {
+  rol: 'usuario' | 'asistente'
+  texto: string
 }
 
 export type RespuestaAsistente =
   | {
       ok: true
-      /** 'ia' = respondió un modelo real; 'simulado' = no hay clave configurada. */
+      /** 'ia' = respondió el modelo; 'simulado' = modo básico por reglas porque
+       *  no hay clave de IA configurada en el servidor. */
       fuente: 'ia' | 'simulado'
       texto: string
       confirmacion?: Confirmacion
@@ -42,11 +63,16 @@ export type RespuestaAsistente =
   | { ok: false; error: string }
 
 /** Si el servidor no responde en este plazo, cortamos y avisamos. Sin esto la
- *  burbuja de "escribiendo…" se queda girando para siempre. */
-const TIMEOUT_MS = 20_000
+ *  burbuja de "escribiendo…" se queda girando para siempre. Un poco más que
+ *  el `maxDuration` del handler, para que llegue su propio mensaje de error. */
+const TIMEOUT_MS = 65_000
 
+/**
+ * Manda la conversación completa (el último mensaje tiene que ser del
+ * usuario) y devuelve la respuesta del asistente.
+ */
 export async function preguntarAlAsistente(
-  mensaje: string,
+  mensajes: MensajeHistorial[],
   contexto: ContextoAsistente,
 ): Promise<RespuestaAsistente> {
   const abort = new AbortController()
@@ -56,7 +82,7 @@ export async function preguntarAlAsistente(
     const res = await fetch('/api/asistente', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ mensaje, contexto }),
+      body: JSON.stringify({ mensajes, contexto }),
       signal: abort.signal,
     })
 

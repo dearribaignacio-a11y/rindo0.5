@@ -43,7 +43,8 @@ function ctorDisponible(): (new () => MotorReconocimiento) | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
 }
 
-export type MotivoErrorVoz = 'permiso' | 'silencio' | 'otro'
+/** 'cancelado' = lo cortó el propio usuario o la app; no hace falta avisar. */
+export type MotivoErrorVoz = 'permiso' | 'silencio' | 'cancelado' | 'otro'
 
 /**
  * Dictado por voz para cargar ventas rápido en el mostrador, con el
@@ -56,10 +57,13 @@ export type MotivoErrorVoz = 'permiso' | 'silencio' | 'otro'
  *
  * En `es-AR`, una sola tanda por vez (no queda escuchando en continuo): se
  * toca el micrófono, se dice una frase, y en cuanto el navegador reconoce
- * una pausa entrega el texto final por `onResultado`.
+ * una pausa entrega el texto final por `onResultado`. Mientras tanto va
+ * pasando lo que entiende por `onParcial`, para mostrarlo en vivo y que se
+ * note que está escuchando.
  */
 export function useReconocimientoVoz(opts: {
   onResultado: (texto: string) => void
+  onParcial?: (texto: string) => void
   onError?: (motivo: MotivoErrorVoz) => void
 }) {
   const [escuchando, setEscuchando] = useState(false)
@@ -71,6 +75,8 @@ export function useReconocimientoVoz(opts: {
   onResultadoRef.current = opts.onResultado
   const onErrorRef = useRef(opts.onError)
   onErrorRef.current = opts.onError
+  const onParcialRef = useRef(opts.onParcial)
+  onParcialRef.current = opts.onParcial
 
   useEffect(() => {
     setSoportado(ctorDisponible() !== null)
@@ -83,13 +89,25 @@ export function useReconocimientoVoz(opts: {
     const motor = new Ctor()
     motor.lang = 'es-AR'
     motor.continuous = false
-    motor.interimResults = false
+    motor.interimResults = true
     motor.maxAlternatives = 1
 
+    let entregado = false
     motor.onresult = (ev) => {
-      const ultimo = ev.results[ev.results.length - 1]
-      const texto = ultimo?.[0]?.transcript
-      if (texto?.trim()) onResultadoRef.current(texto.trim())
+      let texto = ''
+      let final = false
+      for (let i = 0; i < ev.results.length; i++) {
+        texto += ev.results[i]?.[0]?.transcript ?? ''
+        if (ev.results[i]?.isFinal) final = true
+      }
+      texto = texto.trim()
+      if (!texto) return
+      if (final && !entregado) {
+        entregado = true
+        onResultadoRef.current(texto)
+      } else if (!final) {
+        onParcialRef.current?.(texto)
+      }
     }
     motor.onerror = (ev) => {
       setEscuchando(false)
@@ -98,14 +116,25 @@ export function useReconocimientoVoz(opts: {
           ? 'permiso'
           : ev.error === 'no-speech'
             ? 'silencio'
-            : 'otro'
+            : ev.error === 'aborted'
+              ? 'cancelado'
+              : 'otro'
       onErrorRef.current?.(motivo)
     }
     motor.onend = () => setEscuchando(false)
 
+    // Si el asistente estaba hablando, se calla: si no, el micrófono se
+    // escucharía a sí mismo.
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
+
     motorRef.current = motor
     setEscuchando(true)
-    motor.start()
+    try {
+      motor.start()
+    } catch {
+      // `start()` tira si ya había una escucha abierta (doble toque rápido).
+      setEscuchando(false)
+    }
   }, [])
 
   const detener = useCallback(() => {
@@ -117,4 +146,75 @@ export function useReconocimientoVoz(opts: {
   useEffect(() => () => motorRef.current?.stop(), [])
 
   return { escuchando, soportado, iniciar, detener }
+}
+
+/* ── Respuestas en voz alta ────────────────────────────────────────────────
+   Síntesis de voz del propio navegador (speechSynthesis): anda en Chrome,
+   Safari (también iPhone) y Firefox, sin servidor ni costo. */
+
+/** Saca lo que no se lee bien en voz alta: emojis, asteriscos, "$". */
+function paraLeer(texto: string) {
+  return texto
+    .replace(/[*_#`>]/g, '')
+    .replace(/\p{Extended_Pictographic}/gu, '')
+    .replace(/\$\s?([\d.,]+)/g, '$1 pesos')
+    .trim()
+}
+
+function elegirVoz(): SpeechSynthesisVoice | undefined {
+  const voces = window.speechSynthesis.getVoices()
+  return (
+    voces.find((v) => v.lang === 'es-AR') ??
+    voces.find((v) => v.lang === 'es-US' || v.lang === 'es-419' || v.lang === 'es-MX') ??
+    voces.find((v) => v.lang.toLowerCase().startsWith('es'))
+  )
+}
+
+export function useLecturaEnVoz() {
+  const [soportado, setSoportado] = useState(false)
+  const [hablando, setHablando] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    setSoportado(true)
+    // En Chrome la lista de voces llega tarde; pedirla la dispara.
+    window.speechSynthesis.getVoices()
+    return () => window.speechSynthesis.cancel()
+  }, [])
+
+  /**
+   * iPhone sólo deja hablar si la primera lectura sale de un toque del
+   * usuario. La respuesta del asistente llega después de un `fetch`, fuera de
+   * ese toque, así que "desbloqueamos" la voz en el toque con una lectura muda.
+   */
+  const preparar = useCallback(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    const u = new SpeechSynthesisUtterance('')
+    u.volume = 0
+    window.speechSynthesis.speak(u)
+  }, [])
+
+  const hablar = useCallback((texto: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    const limpio = paraLeer(texto)
+    if (!limpio) return
+    window.speechSynthesis.cancel()
+    const u = new SpeechSynthesisUtterance(limpio)
+    u.lang = 'es-AR'
+    const voz = elegirVoz()
+    if (voz) u.voice = voz
+    u.rate = 1.05
+    u.onstart = () => setHablando(true)
+    u.onend = () => setHablando(false)
+    u.onerror = () => setHablando(false)
+    window.speechSynthesis.speak(u)
+  }, [])
+
+  const callar = useCallback(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+    window.speechSynthesis.cancel()
+    setHablando(false)
+  }, [])
+
+  return { soportado, hablando, preparar, hablar, callar }
 }
