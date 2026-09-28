@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Manrope, Space_Grotesk } from 'next/font/google'
+import { PwaRegistro } from '@/components/PwaRegistro'
 import './globals.css'
 
 // Manrope para todo el texto, Space Grotesk sólo para los números grandes.
@@ -21,6 +22,13 @@ export const metadata: Metadata = {
   description:
     'Gestión de gastos del hogar y de tu comercio en una sola app. Pensada para San Juan, Argentina.',
   applicationName: 'Rindo',
+  // iOS no lee el manifest para esto — sin `appleWebApp` no ofrece un ícono
+  // ni una barra de estado decente al agregar la app a la pantalla de inicio.
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Rindo',
+  },
 }
 
 export const viewport: Viewport = {
@@ -42,7 +50,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <PwaRegistro />
+        {children}
+      </body>
     </html>
   )
 }

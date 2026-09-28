@@ -51,6 +51,26 @@ Para activarlo: en Vercel, **Settings → Environment Variables → Add**, nombr
 `ANTHROPIC_API_KEY`, valor tu clave, y redeploy. La clave vive sólo del lado del
 servidor (`lib/server/anthropic.ts`), nunca se incluye en el bundle del cliente.
 
+### Notificaciones push: `NEXT_PUBLIC_VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY`
+
+Rindo es instalable (manifest en `app/manifest.ts`, service worker en
+`public/sw.js`) y puede mandar notificaciones push reales: stock bajo y
+vencimiento del plan, revisado una vez al día por el cron de
+`app/api/notificaciones/verificar`. Sin las claves VAPID cargadas, la app
+sigue siendo instalable pero el interruptor de "Notificaciones" en Ajustes no
+hace nada.
+
+Las claves son un par fijo, se generan **una sola vez** para todo el proyecto
+(no una por usuario):
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Cargá la pública como `NEXT_PUBLIC_VAPID_PUBLIC_KEY` y la privada como
+`VAPID_PRIVATE_KEY` en Vercel (**Settings → Environment Variables**) y en
+`.env.local` para desarrollo. La privada nunca sale de `lib/server/push.ts`.
+
 ## Por qué Next.js y no un servidor propio
 
 Vercel es serverless: **no ejecuta procesos persistentes**. Un

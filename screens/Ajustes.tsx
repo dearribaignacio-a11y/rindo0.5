@@ -32,6 +32,7 @@ import { useNav } from '@/components/nav'
 import { PLANES, esComercial, enPruebaGratis } from '@/lib/plans'
 import { cambiarPlan, resetDB, updateAjustes, updateFlags } from '@/lib/storage'
 import { createClient } from '@/lib/supabase/client'
+import { activarNotificaciones, desactivarNotificaciones } from '@/lib/push'
 import { TEMAS } from '@/lib/temas'
 import { fechaCorta } from '@/lib/format'
 import { cn } from '@/lib/cn'
@@ -118,7 +119,18 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
             control={
               <Switch
                 checked={db.ajustes.notificaciones}
-                onChange={(v) => updateAjustes({ notificaciones: v })}
+                onChange={async (v) => {
+                  if (v) {
+                    const res = await activarNotificaciones()
+                    if (!res.ok) {
+                      toast(res.error ?? 'No pudimos activar las notificaciones.', { tono: 'aviso' })
+                      return
+                    }
+                  } else {
+                    await desactivarNotificaciones()
+                  }
+                  updateAjustes({ notificaciones: v })
+                }}
                 label="Notificaciones"
               />
             }

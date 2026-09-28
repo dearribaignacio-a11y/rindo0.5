@@ -1,0 +1,32 @@
+-- Rindo — suscripciones a notificaciones push (Web Push). Una fila por
+-- dispositivo/navegador que activó los avisos, no por cuenta: la misma
+-- persona puede tener la app instalada en el celular y en la compu.
+
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists push_subscriptions_user_id_idx on public.push_subscriptions (user_id);
+
+alter table public.push_subscriptions enable row level security;
+
+create policy "push_subscriptions: leer las propias"
+  on public.push_subscriptions for select
+  using (auth.uid() = user_id);
+
+create policy "push_subscriptions: crear las propias"
+  on public.push_subscriptions for insert
+  with check (auth.uid() = user_id);
+
+create policy "push_subscriptions: borrar las propias"
+  on public.push_subscriptions for delete
+  using (auth.uid() = user_id);
+
+-- El cron que manda los avisos (stock bajo, vencimiento de plan) lee todas
+-- las cuentas con la Service Role Key, así que no necesita una policy propia
+-- aparte de las de arriba.

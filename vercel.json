@@ -3,6 +3,10 @@
     {
       "path": "/api/mercadopago/cobrar-renovaciones",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/notificaciones/verificar",
+      "schedule": "0 13 * * *"
     }
   ]
 }

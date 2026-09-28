@@ -134,6 +134,17 @@ export type AperturaCajaRow = {
   created_at: string
 }
 
+/** Fila de la tabla `push_subscriptions`: una por dispositivo/navegador que
+ *  activó las notificaciones, no una por cuenta. */
+export type PushSubscriptionRow = {
+  id: string
+  user_id: string
+  endpoint: string
+  p256dh: string
+  auth: string
+  created_at: string
+}
+
 /** Tipado mínimo de la base para el cliente tipado de Supabase. Sólo declara
  *  lo que las migraciones crean; se amplía a medida que se agreguen tablas.
  *  `Relationships`, `Views` y `Functions` están vacíos a propósito — nada acá
@@ -182,6 +193,17 @@ export type Database = {
         Row: AperturaCajaRow
         Insert: Partial<AperturaCajaRow> & { user_id: string; fecha: string; monto_inicial: number }
         Update: Partial<AperturaCajaRow>
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: PushSubscriptionRow
+        Insert: Partial<PushSubscriptionRow> & {
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+        }
+        Update: Partial<PushSubscriptionRow>
         Relationships: []
       }
     }
