@@ -47,7 +47,11 @@ const PROMPTS: Record<Modo, string> = {
 Devolvés únicamente un objeto JSON, sin texto alrededor, con esta forma exacta:
 {"comercio": null, "fecha": "yyyy-mm-dd"|null, "total": number|null, "items": [{"nombre": string, "cantidad": number, "costo": number, "confiable": boolean}]}
 
-Cada renglón de la nota es una venta: "nombre" el producto tal como está escrito (no lo traduzcas a un nombre "correcto", copiá lo que dice la letra), "cantidad" las unidades vendidas (asumí 1 si no se especifica) y "costo" el precio de venta de esa línea escrito en la nota (si hay un precio unitario y un subtotal, preferí el unitario). "comercio" siempre null, esto no es un comprobante de un negocio ajeno. Si un renglón es ilegible o dudoso, igual incluilo con "confiable": false en vez de omitirlo — se revisa a mano después.`,
+Cada renglón de la nota es una venta: "nombre" el producto tal como está escrito (no lo traduzcas a un nombre "correcto", copiá lo que dice la letra), "cantidad" las unidades vendidas (asumí 1 si no se especifica) y "costo" el precio de venta de esa línea escrito en la nota (si hay un precio unitario y un subtotal, preferí el unitario). "comercio" siempre null, esto no es un comprobante de un negocio ajeno.
+
+Algunos comerciantes anotan el código corto del producto en vez de escribir el nombre (por ejemplo, un renglón que sólo dice "3, 2" puede ser "código 3, cantidad 2"). Cuando un renglón parece tener un código así, poné en "nombre" exactamente ese número tal cual está escrito (no inventes ni adivines a qué producto corresponde el código: eso se resuelve después contra el catálogo real).
+
+Si un renglón es ilegible o dudoso, igual incluilo con "confiable": false en vez de omitirlo — se revisa a mano después.`,
 }
 
 /** Detección de ejemplo para cuando no hay clave de IA configurada. */

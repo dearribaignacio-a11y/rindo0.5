@@ -13,6 +13,7 @@ import { addVenta } from '@/lib/storage'
 import { ahoraISO, money } from '@/lib/format'
 import { leerComprobante } from '@/lib/vision'
 import { comprimirImagen } from '@/lib/imagen'
+import { buscarPorCodigo } from '@/lib/codigos'
 import { cn } from '@/lib/cn'
 import type { DB, MetodoPago } from '@/lib/types'
 
@@ -69,7 +70,11 @@ export function VentaFoto({ db }: { db: DB }) {
 
     setItems(
       res.datos.items.map((i) => {
-        const match = db.productos.find((p) => p.nombre.toLowerCase() === i.nombre.toLowerCase())
+        // Algunos anotan el código corto del producto en vez del nombre
+        // ("3" en vez de "Yerba") — se prueba primero por nombre exacto y,
+        // si no matchea, por código.
+        const porNombre = db.productos.find((p) => p.nombre.toLowerCase() === i.nombre.toLowerCase())
+        const match = porNombre ?? buscarPorCodigo(db.productos, i.nombre)
         return {
           productoId: match?.id ?? null,
           nombreDetectado: i.nombre,
@@ -180,8 +185,9 @@ export function VentaFoto({ db }: { db: DB }) {
             </p>
           ) : (
             simulado && (
-              <p className="text-[12px] leading-relaxed text-ink-faint">
-                Lectura de ejemplo: todavía no hay una clave de IA configurada en el servidor.
+              <p className="rounded-[10px] border border-warn/40 bg-warn-dim px-3 py-2 text-[12.5px] leading-relaxed text-warn">
+                Esto es un ejemplo: todavía no leyó tu foto de verdad porque falta configurar la
+                lectura por IA en el servidor. Mientras tanto, corregí los renglones a mano acá abajo.
               </p>
             )
           )}

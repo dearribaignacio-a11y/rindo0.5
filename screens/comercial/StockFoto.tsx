@@ -147,9 +147,9 @@ export function StockFoto() {
             </p>
           ) : (
             simulado && (
-              <p className="text-[12px] leading-relaxed text-ink-faint">
-                Lectura de ejemplo: todavía no hay una clave de IA configurada en el servidor. Podés
-                editar todo a mano igual.
+              <p className="rounded-[10px] border border-warn/40 bg-warn-dim px-3 py-2 text-[12.5px] leading-relaxed text-warn">
+                Esto es un ejemplo: todavía no leyó tu foto de verdad porque falta configurar la
+                lectura por IA en el servidor. Mientras tanto, cargá los datos reales a mano acá abajo.
               </p>
             )
           )}
