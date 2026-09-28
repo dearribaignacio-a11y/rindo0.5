@@ -180,3 +180,24 @@ body {
     transform: translateX(100%);
   }
 }
+
+/* Impresión de listas (ver "Imprimir lista" en Productos): el truco clásico
+   de aislar un único elemento — se oculta todo por defecto y sólo se hace
+   visible lo que está adentro de `.hoja-imprimir`, que además se posiciona
+   para ocupar toda la hoja. Así no hace falta tocar el tab bar, el FAB ni
+   ningún otro cromado de la app uno por uno: cualquier pantalla que rendee
+   una `.hoja-imprimir` (aunque esté oculta en pantalla) imprime limpio. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .hoja-imprimir,
+  .hoja-imprimir * {
+    visibility: visible;
+  }
+  .hoja-imprimir {
+    position: absolute;
+    inset: 0;
+    padding: 24px;
+  }
+}
