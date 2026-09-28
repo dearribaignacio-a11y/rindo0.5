@@ -11,6 +11,7 @@ import { Sheet } from '@/components/ui/Sheet'
 import { createClient } from '@/lib/supabase/client'
 import { mapAuthError } from '@/lib/supabase/errores'
 import { reenviarConfirmacion } from '@/lib/supabase/reenviar'
+import { confirmarPendiente } from '@/lib/supabase/alta'
 import { PASS_MIN, emailValido, errorPassword } from '@/lib/validacion'
 import type { PlanId } from '@/lib/types'
 
@@ -100,7 +101,13 @@ export function Login({
 
     setCargando('sesion')
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    let { error } = await supabase.auth.signInWithPassword({ email, password })
+
+    // Cuentas creadas cuando todavía se pedía confirmar el correo: se
+    // confirman por servidor y se reintenta el login una vez.
+    if (error?.message.toLowerCase().includes('email not confirmed') && (await confirmarPendiente(email))) {
+      ;({ error } = await supabase.auth.signInWithPassword({ email, password }))
+    }
     setCargando(null)
 
     if (error) {
