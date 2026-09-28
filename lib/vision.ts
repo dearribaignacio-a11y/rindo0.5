@@ -42,7 +42,7 @@ const TIMEOUT_MS = 45_000
 
 export async function leerComprobante(
   imagen: string,
-  modo: 'ticket' | 'factura',
+  modo: 'ticket' | 'factura' | 'venta',
 ): Promise<ResultadoVision> {
   const abort = new AbortController()
   const timer = setTimeout(() => abort.abort(), TIMEOUT_MS)

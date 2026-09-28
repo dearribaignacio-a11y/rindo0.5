@@ -12,6 +12,7 @@ import { useNav } from '@/components/nav'
 import { addReposicion } from '@/lib/storage'
 import { ahoraISO, money } from '@/lib/format'
 import { leerComprobante, type ItemDetectado } from '@/lib/vision'
+import { comprimirImagen } from '@/lib/imagen'
 import { cn } from '@/lib/cn'
 
 type Etapa = 'captura' | 'leyendo' | 'confirmar'
@@ -44,7 +45,7 @@ export function StockFoto() {
 
   async function procesar(file?: File) {
     if (!file) return
-    const dataUrl = await comprimir(file)
+    const dataUrl = await comprimirImagen(file)
     setFoto(dataUrl)
     setEtapa('leyendo')
 
@@ -199,29 +200,4 @@ export function StockFoto() {
       )}
     </Screen>
   )
-}
-
-/** Reduce la foto antes de mandarla: una imagen de cámara son varios MB. */
-async function comprimir(file: File, lado = 1280): Promise<string> {
-  const dataUrl = await new Promise<string>((res) => {
-    const lector = new FileReader()
-    lector.onload = () => res(String(lector.result))
-    lector.readAsDataURL(file)
-  })
-
-  return new Promise((res) => {
-    const img = new Image()
-    img.onload = () => {
-      const escala = Math.min(1, lado / Math.max(img.width, img.height))
-      const canvas = document.createElement('canvas')
-      canvas.width = Math.round(img.width * escala)
-      canvas.height = Math.round(img.height * escala)
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return res(dataUrl)
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      res(canvas.toDataURL('image/jpeg', 0.82))
-    }
-    img.onerror = () => res(dataUrl)
-    img.src = dataUrl
-  })
 }

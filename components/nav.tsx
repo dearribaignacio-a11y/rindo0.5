@@ -28,6 +28,7 @@ export type Ruta =
   /* Pantallas apiladas — Comercial */
   | 'venta-manual'
   | 'stock-foto'
+  | 'venta-foto'
   | 'chat'
   | 'mi-negocio'
   | 'empleados'

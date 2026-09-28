@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Camera, Landmark, PackageSearch, PencilLine, Receipt, Sparkles, TrendingUp } from 'lucide-react'
+import { Camera, Landmark, NotebookPen, PackageSearch, PencilLine, Receipt, Sparkles, TrendingUp } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { BarChart } from '@/components/ui/BarChart'
 import { Screen, SectionTitle } from '@/components/ui/Screen'
@@ -229,6 +229,12 @@ export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => v
 
       <Fab
         acciones={[
+          {
+            id: 'venta-foto',
+            label: 'Cargar venta por foto',
+            icon: NotebookPen,
+            onSelect: () => nav.push('venta-foto'),
+          },
           {
             id: 'foto',
             label: 'Cargar factura por foto',

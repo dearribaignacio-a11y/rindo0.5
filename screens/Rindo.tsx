@@ -40,6 +40,7 @@ import { ComercialProductos } from '@/screens/comercial/Productos'
 import { ComercialStock } from '@/screens/comercial/Stock'
 import { MasVendidos } from '@/screens/comercial/MasVendidos'
 import { StockFoto } from '@/screens/comercial/StockFoto'
+import { VentaFoto } from '@/screens/comercial/VentaFoto'
 import { Empleados } from '@/screens/comercial/Empleados'
 import { MiNegocio } from '@/screens/comercial/MiNegocio'
 import { Impuestos } from '@/screens/comercial/Impuestos'
@@ -187,6 +188,7 @@ function Interna({ db }: { db: DB }) {
         {ruta === 'pagar-tarjeta' && <PagarConTarjeta />}
         {/* Pantallas apiladas — Comercial y Comercial Pro */}
         {ruta === 'stock-foto' && <StockFoto />}
+        {ruta === 'venta-foto' && <VentaFoto db={db} />}
         {ruta === 'mi-negocio' && <MiNegocio db={db} />}
         {ruta === 'empleados' && <Empleados db={db} />}
         {ruta === 'impuestos' && <Impuestos db={db} />}

@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { MODELO, clienteIA, jsonDe, partirDataUrl, textoDe } from '@/lib/server/anthropic'
 
 /**
- * Lectura de tickets (Hogar) y de facturas de proveedor (Comercial).
+ * Lectura de tickets (Hogar), facturas de proveedor (Comercial) y notas de
+ * venta escritas a mano (Comercial — ver `screens/comercial/VentaFoto.tsx`).
  *
  * Route Handler serverless de Next.js: no hay ningún servidor propio corriendo
  * de forma persistente, así que Vercel lo despliega como función sin
@@ -17,7 +18,7 @@ export const runtime = 'nodejs'
 /** Las fotos llegan en base64: el handler no se puede cachear. */
 export const dynamic = 'force-dynamic'
 
-type Modo = 'ticket' | 'factura'
+type Modo = 'ticket' | 'factura' | 'venta'
 
 interface ItemDetectado {
   nombre: string
@@ -41,6 +42,12 @@ const PROMPTS: Record<Modo, string> = {
   factura: `Sos un lector de facturas y remitos de proveedores argentinos. Devolvés únicamente un objeto JSON, sin texto alrededor, con esta forma exacta:
 {"comercio": string|null, "fecha": "yyyy-mm-dd"|null, "total": number|null, "items": [{"nombre": string, "cantidad": number, "costo": number, "confiable": boolean}]}
 "cantidad" son las unidades que ingresan al stock y "costo" el precio unitario de compra sin IVA discriminado si aparece por separado. Si un renglón está borroso o dudoso, igual incluilo con "confiable": false.`,
+  venta: `Sos un lector de notas de venta escritas a mano por el dueño de un comercio argentino — un cuaderno o una hoja donde anotó, renglón por renglón, lo que fue vendiendo durante el día. La letra puede ser desprolija, con abreviaturas, tachones o números poco claros: hacé tu mejor esfuerzo para descifrarla, no la rechaces por difícil.
+
+Devolvés únicamente un objeto JSON, sin texto alrededor, con esta forma exacta:
+{"comercio": null, "fecha": "yyyy-mm-dd"|null, "total": number|null, "items": [{"nombre": string, "cantidad": number, "costo": number, "confiable": boolean}]}
+
+Cada renglón de la nota es una venta: "nombre" el producto tal como está escrito (no lo traduzcas a un nombre "correcto", copiá lo que dice la letra), "cantidad" las unidades vendidas (asumí 1 si no se especifica) y "costo" el precio de venta de esa línea escrito en la nota (si hay un precio unitario y un subtotal, preferí el unitario). "comercio" siempre null, esto no es un comprobante de un negocio ajeno. Si un renglón es ilegible o dudoso, igual incluilo con "confiable": false en vez de omitirlo — se revisa a mano después.`,
 }
 
 /** Detección de ejemplo para cuando no hay clave de IA configurada. */
@@ -57,6 +64,19 @@ function simular(modo: Modo): Deteccion {
         { nombre: 'Fideos 500g', cantidad: 3, costo: 1500, confiable: true },
         { nombre: 'Yerba 1kg', cantidad: 1, costo: 4700, confiable: true },
         { nombre: 'Art. no identificado', cantidad: 1, costo: 0, confiable: false },
+      ],
+    }
+  }
+  if (modo === 'venta') {
+    return {
+      comercio: null,
+      fecha: hoy,
+      total: null,
+      items: [
+        { nombre: 'Fernet', cantidad: 1, costo: 6500, confiable: true },
+        { nombre: 'Coca 2L', cantidad: 2, costo: 2200, confiable: true },
+        { nombre: 'Yerba', cantidad: 1, costo: 4500, confiable: true },
+        { nombre: 'Renglón ilegible', cantidad: 1, costo: 0, confiable: false },
       ],
     }
   }
@@ -82,7 +102,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 })
   }
 
-  const modo: Modo = cuerpo.modo === 'factura' ? 'factura' : 'ticket'
+  const modo: Modo = cuerpo.modo === 'factura' || cuerpo.modo === 'venta' ? cuerpo.modo : 'ticket'
   const cliente = clienteIA()
 
   // Sin clave configurada: la interfaz sigue siendo completamente funcional
