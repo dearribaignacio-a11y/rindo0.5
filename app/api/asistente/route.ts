@@ -106,17 +106,38 @@ function detectarMetodo(texto: string): MetodoPago {
   return 'efectivo'
 }
 
-/** Busca el producto que menciona el mensaje: prioriza un código corto
- *  exacto (más confiable, sobre todo si el mensaje viene de una
- *  transcripción de audio) y, si ninguno de los números del mensaje matchea
- *  un código, cae a buscar por la primera palabra del nombre. */
-function buscarProducto(texto: string, productos: Contexto['productos']) {
+/**
+ * Busca el producto y la cantidad que menciona el mensaje. Un mensaje puede
+ * traer dos números a la vez (cantidad y código: "vendí 3 del 1"), así que
+ * primero se busca una marca explícita ("del 1", "código 1", "cod 1", "#1")
+ * que diga sin ambigüedad cuál de los dos números es el código — el resto de
+ * los números del mensaje quedan libres para ser la cantidad. Sin esa marca,
+ * se prueba cada número contra los códigos existentes (para "vendí el 20"
+ * sin más) y recién si ninguno matchea se cae a buscar por la primera
+ * palabra del nombre.
+ */
+function buscarProductoYCantidad(texto: string, productos: Contexto['productos']) {
   const numeros = texto.match(/\d+/g) ?? []
-  for (const n of numeros) {
-    const porCodigo = productos?.find((p) => p.codigo && p.codigo === n)
-    if (porCodigo) return porCodigo
+
+  const marca = /(?:c[oó]digo|cod\.?|del|#)\s*(\d+)/.exec(texto)
+  if (marca) {
+    const producto = productos?.find((p) => p.codigo === marca[1])
+    if (producto) {
+      const resto = numeros.filter((n) => n !== marca[1])
+      return { producto, cantidad: Number(resto[0] ?? 1) }
+    }
   }
-  return productos?.find((p) => texto.includes(p.nombre.toLowerCase().split(' ')[0]))
+
+  for (const n of numeros) {
+    const producto = productos?.find((p) => p.codigo && p.codigo === n)
+    if (producto) {
+      const resto = numeros.filter((x) => x !== n)
+      return { producto, cantidad: Number(resto[0] ?? 1) }
+    }
+  }
+
+  const producto = productos?.find((p) => texto.includes(p.nombre.toLowerCase().split(' ')[0]))
+  return { producto, cantidad: Number(numeros[0] ?? 1) }
 }
 
 /**
@@ -127,14 +148,7 @@ function simular(mensaje: string, ctx: Contexto): Respuesta {
   const texto = mensaje.toLowerCase()
   const productos = ctx.productos ?? []
 
-  const nombrado = buscarProducto(texto, productos)
-  // Si el producto se encontró por código, ese número no cuenta como
-  // cantidad — si no, "vendí 20" (código del Fernet) anotaría 20 unidades
-  // en vez de 1. La cantidad sale del primer número que no sea el código.
-  const numeros = texto.match(/\d+/g) ?? []
-  const cantidad = Number(
-    (nombrado?.codigo ? numeros.find((n) => n !== nombrado.codigo) : numeros[0]) ?? 1,
-  )
+  const { producto: nombrado, cantidad } = buscarProductoYCantidad(texto, productos)
   const metodo = detectarMetodo(texto)
 
   /* La consulta va ANTES de la venta a propósito. "¿Cuánto vendí hoy?"
