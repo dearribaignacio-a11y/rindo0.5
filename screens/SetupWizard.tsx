@@ -132,6 +132,18 @@ export function SetupWizard({
       return
     }
 
+    // Si el email ya tiene cuenta, Supabase no devuelve error (para no filtrar
+    // qué cuentas existen) ni manda ningún correo: devuelve un usuario sin
+    // identidades. Sin este chequeo la app mostraba "Confirmá tu correo" y el
+    // correo nunca llegaba.
+    if (data.user && data.user.identities?.length === 0) {
+      setGuardando(false)
+      setError(
+        'Ya existe una cuenta con ese email. Volvé e iniciá sesión, o usá "¿Olvidaste tu contraseña?".',
+      )
+      return
+    }
+
     // Toda cuenta nueva arranca con el mes gratis de Comercial Pro activo
     // (el trigger `handle_new_user` ya lo dejó así del lado del servidor, ver
     // migración 0008) — acá sólo se refleja lo mismo en el perfil local para
