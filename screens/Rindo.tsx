@@ -187,7 +187,7 @@ function Interna({ db }: { db: DB }) {
         {ruta === 'planes' && <PantallaPlanes db={db} />}
         {ruta === 'pagar-tarjeta' && <PagarConTarjeta />}
         {/* Pantallas apiladas — Comercial y Comercial Pro */}
-        {ruta === 'stock-foto' && <StockFoto />}
+        {ruta === 'stock-foto' && <StockFoto db={db} />}
         {ruta === 'venta-foto' && <VentaFoto db={db} />}
         {ruta === 'mi-negocio' && <MiNegocio db={db} />}
         {ruta === 'empleados' && <Empleados db={db} />}

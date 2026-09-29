@@ -134,6 +134,11 @@ export interface ItemReposicion {
   costo: number
   /** true cuando lo detectó la lectura de la factura y nadie lo tocó. */
   autoDetectado?: boolean
+  /** Precio de venta elegido a mano para un producto nuevo. Si no viene,
+   *  se calcula solo con el margen por defecto (60% sobre el costo). */
+  precioManual?: number
+  /** Categoría elegida a mano para un producto nuevo. */
+  categoriaManual?: string
 }
 
 export interface Reposicion {

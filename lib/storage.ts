@@ -423,12 +423,13 @@ export async function addReposicion(rep: Omit<Reposicion, 'id'>) {
       productos = productos.map((p) => (p.id === actualizado.id ? actualizado : p))
       items.push({ ...item, productoId: actualizado.id })
     } else {
-      // Producto desconocido: se da de alta con un margen inicial del 60%.
+      // Producto desconocido: se da de alta con lo que haya elegido el
+      // comerciante, o con un margen inicial del 60% si dejó que fuera automático.
       const nuevo = await operaciones.crearProducto({
         nombre: item.nombre,
-        categoria: 'Sin categoría',
+        categoria: item.categoriaManual?.trim() || 'Sin categoría',
         costo: item.costo,
-        precio: Math.round((item.costo * 1.6) / 10) * 10,
+        precio: item.precioManual ?? Math.round((item.costo * 1.6) / 10) * 10,
         stock: item.cantidad,
         stockMin: 5,
         codigo: asignarCodigo(productos),
