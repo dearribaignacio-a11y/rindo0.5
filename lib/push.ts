@@ -27,7 +27,7 @@ export function soportaNotificaciones(): boolean {
 /** iPhone/iPad — incluye el iPad moderno, que desde iOS 13 se identifica
  *  como "MacIntel" en el user agent pero tiene pantalla táctil (una Mac de
  *  verdad no). */
-function esIOS(): boolean {
+export function esIOS(): boolean {
   if (typeof navigator === 'undefined') return false
   return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 }
@@ -36,7 +36,7 @@ function esIOS(): boolean {
  *  inicio), no como una pestaña más de Safari/Chrome. `standalone` es la
  *  propiedad específica de iOS; el resto de los navegadores usan el media
  *  query de abajo. */
-function esStandalone(): boolean {
+export function esStandalone(): boolean {
   if (typeof window === 'undefined') return false
   const iosStandalone = (window.navigator as Navigator & { standalone?: boolean }).standalone
   return window.matchMedia('(display-mode: standalone)').matches || iosStandalone === true

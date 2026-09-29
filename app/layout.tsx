@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Manrope, Space_Grotesk } from 'next/font/google'
 import { PwaRegistro } from '@/components/PwaRegistro'
+import { InstalarApp } from '@/components/InstalarApp'
 import './globals.css'
 
 // Manrope para todo el texto, Space Grotesk sólo para los números grandes.
@@ -52,6 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <PwaRegistro />
+        <InstalarApp />
         {children}
       </body>
     </html>
