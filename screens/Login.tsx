@@ -1,13 +1,18 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
-import { Lock, Mail } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { ArrowLeft, Lock, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
 import { Input } from '@/components/ui/Input'
 import { Logo } from '@/components/ui/Logo'
+import { Badge } from '@/components/ui/Bits'
 import { Segmented } from '@/components/ui/Segmented'
 import { Sheet } from '@/components/ui/Sheet'
+import { ORDEN_PLANES, PLANES } from '@/lib/plans'
+import { money } from '@/lib/format'
+import { cn } from '@/lib/cn'
 import { createClient } from '@/lib/supabase/client'
 import { mapAuthError } from '@/lib/supabase/errores'
 import { reenviarConfirmacion } from '@/lib/supabase/reenviar'
@@ -16,6 +21,7 @@ import { PASS_MIN, emailValido, errorPassword } from '@/lib/validacion'
 import type { PlanId } from '@/lib/types'
 
 type Modo = 'ingresar' | 'crear'
+type Paso = 'datos' | 'plan'
 
 interface Errores {
   email?: string
@@ -27,17 +33,18 @@ interface Errores {
 /**
  * Pantalla pública: iniciar sesión o crear una cuenta.
  *
- * Ya no hay un paso de "elegí tu plan": toda cuenta nueva arranca directo con
- * un mes gratis del plan más completo (Comercial Pro), para que se pueda
- * probar la app a fondo antes de decidir si se paga o se pasa al plan Hogar,
- * gratis para siempre. Quién arranca con qué plan de acá en más lo define el
- * trigger `handle_new_user` del lado del servidor (ver migración 0008), no
- * este formulario.
+ * El alta es de dos pasos: primero credenciales, después elegir uno de los
+ * tres planes. Elegir cualquiera de los dos planes de Comercio no cobra nada
+ * en el momento — arrancan con 30 días gratis, y recién al terminar ese
+ * período hay que cargar una tarjeta para seguir (ver `handle_new_user` en la
+ * migración 0011, que es quien realmente decide `suscripcion_activa` y
+ * `proximo_cobro` del lado del servidor — este formulario sólo manda la
+ * intención).
  *
  * El alta real (`supabase.auth.signUp()`) no ocurre acá: recién se dispara al
  * final de `SetupWizard`, que es donde se termina de juntar nombre, negocio y
- * teléfono para mandarlos como metadatos del `signUp()`. Esta pantalla sólo
- * junta las credenciales.
+ * teléfono para mandarlos como metadatos del `signUp()`. Esta pantalla junta
+ * credenciales y, si es alta nueva, el plan elegido.
  */
 export function Login({
   onIngreso,
@@ -45,10 +52,11 @@ export function Login({
 }: {
   /** Login con cuenta existente confirmado contra Supabase. */
   onIngreso: () => void
-  /** Credenciales listas: falta el paso de `SetupWizard` antes del alta real. */
+  /** Datos + plan listos: falta el paso de `SetupWizard` antes del alta real. */
   onCrearCuenta: (plan: PlanId, email: string, password: string) => void
 }) {
   const [modo, setModo] = useState<Modo>('ingresar')
+  const [paso, setPaso] = useState<Paso>('datos')
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -91,11 +99,7 @@ export function Login({
     if (!validarDatos()) return
 
     if (modo === 'crear') {
-      // Ya no se elige plan en el alta: toda cuenta nueva arranca con el mes
-      // gratis de Comercial Pro (ver comentario de arriba). El alta real se
-      // dispara al final de SetupWizard, una vez juntados nombre/negocio/
-      // teléfono.
-      onCrearCuenta('comercial-pro', email, password)
+      setPaso('plan')
       return
     }
 
@@ -131,21 +135,32 @@ export function Login({
     setReenvio('enviado')
   }
 
+  function elegirPlan(pid: PlanId) {
+    // El alta real se dispara al final de SetupWizard, una vez juntados
+    // nombre/negocio/teléfono: ahí recién hay metadatos completos para el
+    // signUp(). Acá sólo pasamos la posta con lo que ya tenemos.
+    onCrearCuenta(pid, email, password)
+  }
+
   return (
     <div
       // Marca que habilita el ancho extra en desktop (ver .app-col en globals.css).
       data-pantalla="publica"
       className="min-h-dvh w-full px-5 pb-16 pt-14 sm:px-6 lg:px-10"
     >
-      <div className="mx-auto w-full max-w-[440px] lg:max-w-none">
+      <div className="mx-auto w-full max-w-[520px] lg:max-w-none">
         <Logo size="lg" />
 
-        <motion.div
-          initial={{ opacity: 0, x: 16 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-          className="mx-auto w-full max-w-[440px]"
-        >
+        <AnimatePresence mode="wait" initial={false}>
+          {paso === 'datos' ? (
+            <motion.div
+              key="datos"
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+              className="mx-auto w-full max-w-[440px]"
+            >
           <h1 className="mt-7 text-[27px] font-semibold leading-[1.15] tracking-[-0.025em] text-ink">
             Tus números, ordenados.
           </h1>
@@ -268,7 +283,7 @@ export function Login({
             )}
 
             <Button full size="lg" type="submit" loading={cargando === 'sesion'}>
-              {modo === 'crear' ? 'Crear mi cuenta' : 'Iniciar sesión'}
+              {modo === 'crear' ? 'Continuar' : 'Iniciar sesión'}
             </Button>
           </form>
 
@@ -288,15 +303,122 @@ export function Login({
 
           {modo === 'crear' && (
             <p className="mt-4 text-center text-xs leading-relaxed text-ink-faint">
-              Arrancás con 30 días gratis del plan Comercial Pro, para probar todo. Después elegís si
-              seguís pagando o pasás al plan Hogar, gratis para siempre.
+              En el próximo paso elegís tu plan. El Hogar es gratis para siempre; los de Comercio
+              arrancan con 30 días gratis antes de pagar nada.
             </p>
           )}
-        </motion.div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="plan"
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -16 }}
+              transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <PasoPlanes email={email} onElegir={elegirPlan} onVolver={() => setPaso('datos')} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <RecuperarSheet open={recuperando} onClose={() => setRecuperando(false)} emailInicial={email} />
     </div>
+  )
+}
+
+/* ── Paso 2: elección de plan ──────────────────────────────────────────── */
+
+function PasoPlanes({
+  email,
+  onElegir,
+  onVolver,
+}: {
+  email: string
+  onElegir: (p: PlanId) => void
+  onVolver: () => void
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onVolver}
+        className="mt-6 inline-flex min-h-11 items-center gap-2 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
+      >
+        <ArrowLeft className="size-4" />
+        Volver
+      </button>
+
+      <h2 className="mt-3 text-[22px] font-semibold tracking-[-0.02em] text-ink">Elegí tu plan</h2>
+      <p className="mt-1 text-[13.5px] text-ink-muted">
+        Creando la cuenta de <span className="text-ink">{email}</span>. Podés cambiar de plan cuando
+        quieras desde Ajustes.
+      </p>
+
+      <div className="mt-5 grid gap-3.5 lg:grid-cols-3 lg:items-start lg:gap-5">
+        {ORDEN_PLANES.map((pid) => {
+          const p = PLANES[pid]
+          const Icon = p.icon
+          const gratis = p.mensual === 0
+
+          return (
+            <Card key={pid} className={cn('lg:h-full', p.recomendado && 'border-accent-hi/50')}>
+              <div className="flex items-start gap-3">
+                <span
+                  className={cn(
+                    'grid size-12 shrink-0 place-items-center rounded-[14px] border',
+                    p.recomendado
+                      ? 'border-accent-hi/40 bg-accent-dim text-accent-hi'
+                      : 'border-line-strong bg-surface-2 text-ink-muted',
+                  )}
+                >
+                  <Icon className="size-6" strokeWidth={1.5} />
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-[17px] font-semibold tracking-[-0.02em] text-ink">{p.nombre}</h3>
+                    {p.badge && <Badge tone="accent">{p.badge}</Badge>}
+                  </div>
+                  <p className="mt-0.5 text-[13px] text-ink-faint">{p.bajada}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-[10px] bg-surface-2 px-3 py-2.5">
+                {gratis ? (
+                  <p className="text-[13px] font-medium text-pos">Gratis para siempre</p>
+                ) : (
+                  <>
+                    <p className="text-[13px] font-medium text-accent-hi">Gratis los primeros 30 días</p>
+                    <p className="mt-0.5 text-[12px] text-ink-faint">
+                      Después, <span className="tabular text-ink">{money(p.mensual)}</span> por mes
+                    </p>
+                  </>
+                )}
+              </div>
+
+              <ul className="mt-3.5 space-y-1.5">
+                {p.features.slice(0, 4).map((f) => (
+                  <li key={f.texto} className="flex items-center gap-2.5">
+                    <f.icon className="size-4 shrink-0 text-accent-hi" strokeWidth={1.8} />
+                    <span className="text-[13px] text-ink-muted">{f.texto}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <Button full className="mt-4" onClick={() => onElegir(pid)}>
+                Elegir {p.nombre}
+              </Button>
+            </Card>
+          )
+        })}
+      </div>
+
+      <p className="mt-5 text-center text-xs leading-relaxed text-ink-faint">
+        El plan Hogar es gratis y se financia con anuncios. Los planes de Comercio no muestran
+        publicidad, y recién se cobran cuando termina el mes de prueba.
+      </p>
+    </>
   )
 }
 
