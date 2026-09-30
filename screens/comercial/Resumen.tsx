@@ -1,7 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { Camera, Landmark, NotebookPen, PackageSearch, PencilLine, Receipt, Sparkles, TrendingUp } from 'lucide-react'
+import {
+  Camera,
+  ChevronRight,
+  FileSpreadsheet,
+  Landmark,
+  NotebookPen,
+  PackageSearch,
+  PencilLine,
+  Receipt,
+  Sparkles,
+  TrendingUp,
+} from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { BarChart } from '@/components/ui/BarChart'
 import { Screen, SectionTitle } from '@/components/ui/Screen'
@@ -159,6 +170,18 @@ export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => v
             </Card>
           </>
         )}
+
+        <SectionTitle>Contador</SectionTitle>
+        <Card interactive onClick={() => nav.push('contador')} className="flex items-center gap-3">
+          <IconChip icon={FileSpreadsheet} />
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-medium text-ink">Enviar al contador</p>
+            <p className="mt-0.5 truncate text-[12.5px] text-ink-faint">
+              Ventas, compras y stock del mes en Excel
+            </p>
+          </div>
+          <ChevronRight className="size-[18px] shrink-0 text-ink-faint" />
+        </Card>
 
         <SectionTitle
           action={

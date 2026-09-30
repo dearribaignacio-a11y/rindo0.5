@@ -607,10 +607,21 @@ export async function resetDB() {
     // Si falla el borrado remoto (sin red, etc.) igual limpiamos localmente
     // para no dejar la app en un estado peor que antes de tocar el botón.
   })
-  const { perfil, empresa, empleados, flags } = getDB()
+  const { perfil, empresa, empleados, flags, ajustes } = getDB()
   const categorias: Categoria[] =
     perfil?.plan === 'hogar' ? CATEGORIAS_HOGAR.map((c) => ({ ...c, id: id() })) : []
-  cache = { ...dbVacia(), perfil, empresa, empleados, flags, categorias }
+  // El contador tampoco es un dato financiero: es configuración, igual que
+  // el perfil. Borrarlo obligaba a volver a cargar su WhatsApp.
+  const vacia = dbVacia()
+  cache = {
+    ...vacia,
+    perfil,
+    empresa,
+    empleados,
+    flags,
+    categorias,
+    ajustes: { ...vacia.ajustes, contador: ajustes.contador },
+  }
   escribirDisco(cache)
   if (typeof document !== 'undefined') document.documentElement.removeAttribute('data-theme')
   try {

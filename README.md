@@ -71,6 +71,27 @@ Cargá la pública como `NEXT_PUBLIC_VAPID_PUBLIC_KEY` y la privada como
 `VAPID_PRIVATE_KEY` en Vercel (**Settings → Environment Variables**) y en
 `.env.local` para desarrollo. La privada nunca sale de `lib/server/push.ts`.
 
+## Enviar al contador (prototipo)
+
+Pantalla de los planes comerciales (Resumen → "Enviar al contador", o
+Ajustes → Cuenta) que arma un Excel con ventas, compras y stock del período
+y lo manda por WhatsApp.
+
+- **Columnas del Excel:** se definen en un solo lugar,
+  `lib/contador/columnas.ts`. El formato (encabezado azul, fila congelada,
+  filtros, pesos, fechas, anchos) lo aplica `lib/contador/excel.ts` según el
+  tipo de cada columna.
+- **Envío:** `lib/contador/envio.ts`. (A) sube el archivo al bucket privado
+  `envios-contador` de Supabase Storage y abre `wa.me` con un link firmado
+  que vence a los 7 días; (B) si eso falla, menú de compartir del celular con
+  el archivo adjunto; (C) si tampoco hay, descarga + WhatsApp con el mensaje.
+- **Para activar la opción A:** correr `supabase/migrations/0012_envios_contador.sql`
+  (crea el bucket, sus permisos y las columnas proveedor/comprobante/foto de
+  `reposiciones`). Sin la migración la app sigue funcionando con B o C.
+- **Demo sin login:** `/demo/contador`, con datos de ejemplo de Print (una
+  librería). No lee ni escribe datos de ninguna cuenta y no necesita claves
+  de Supabase para correr.
+
 ## Por qué Next.js y no un servidor propio
 
 Vercel es serverless: **no ejecuta procesos persistentes**. Un

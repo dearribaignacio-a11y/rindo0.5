@@ -12,6 +12,11 @@ function esPublica(pathname: string) {
  *  lugar donde el token se refresca de punta a punta (cookie de request y de
  *  response), así que Server Components y Route Handlers sólo lo leen. */
 export async function updateSession(request: NextRequest) {
+  // Las demos (`/demo/...`) no usan sesión ni datos de ninguna cuenta: salen
+  // antes de tocar Supabase, así corren incluso sin las claves configuradas.
+  const ruta = request.nextUrl.pathname
+  if (ruta === '/demo' || ruta.startsWith('/demo/')) return NextResponse.next({ request })
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(

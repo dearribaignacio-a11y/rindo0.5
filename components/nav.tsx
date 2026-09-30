@@ -36,6 +36,7 @@ export type Ruta =
   | 'mov-comercio'
   | 'pagar-tarjeta'
   | 'mas-vendidos'
+  | 'contador'
   /* Comercial Pro */
   | 'pro'
   | 'pro-impuestos'

@@ -39,6 +39,7 @@ import { ComercialMovimientos } from '@/screens/comercial/Movimientos'
 import { ComercialProductos } from '@/screens/comercial/Productos'
 import { ComercialStock } from '@/screens/comercial/Stock'
 import { MasVendidos } from '@/screens/comercial/MasVendidos'
+import { EnviarContadorApp } from '@/screens/comercial/EnviarContador'
 import { StockFoto } from '@/screens/comercial/StockFoto'
 import { VentaFoto } from '@/screens/comercial/VentaFoto'
 import { Empleados } from '@/screens/comercial/Empleados'
@@ -59,7 +60,7 @@ import {
   suscribirseAOperaciones,
   updateFlags,
 } from '@/lib/storage'
-import { cuentaBloqueada, esPro } from '@/lib/plans'
+import { cuentaBloqueada, esComercial, esPro } from '@/lib/plans'
 import type { DB, PlanId } from '@/lib/types'
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -193,6 +194,7 @@ function Interna({ db }: { db: DB }) {
         {ruta === 'empleados' && <Empleados db={db} />}
         {ruta === 'impuestos' && <Impuestos db={db} />}
         {ruta === 'mas-vendidos' && <MasVendidos db={db} />}
+        {ruta === 'contador' && esComercial(plan) && <EnviarContadorApp db={db} />}
         {ruta === 'pro-precios' && esPro(plan) && <ProPrecios db={db} />}
         {ruta === 'pro-personal' && esPro(plan) && <ProPersonal db={db} />}
         {ruta === 'pro-impuestos' && esPro(plan) && <ProImpuestos db={db} />}
