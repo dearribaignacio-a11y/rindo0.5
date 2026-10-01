@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Barcode, Trash2 } from 'lucide-react'
+import dynamic from 'next/dynamic'
+import { Barcode, Camera, Trash2 } from 'lucide-react'
 import { Sheet } from '@/components/ui/Sheet'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Button } from '@/components/ui/Button'
@@ -13,6 +14,13 @@ import { money, pct1 } from '@/lib/format'
 import { margen } from '@/lib/calc'
 import { asignarCodigo } from '@/lib/codigos'
 import type { Producto } from '@/lib/types'
+
+// La librería de lectura de códigos (ZXing) pesa bastante — se carga recién
+// cuando alguien toca el botón de cámara, no de arriba para toda la app.
+const EscanearCamara = dynamic(
+  () => import('@/components/comercial/EscanearCamara').then((m) => m.EscanearCamara),
+  { ssr: false },
+)
 
 export function ProductoSheet({
   open,
@@ -29,6 +37,8 @@ export function ProductoSheet({
   const toast = useToast()
   const editando = Boolean(producto)
   const [confirmando, setConfirmando] = useState(false)
+  const [camara, setCamara] = useState(false)
+  const [camaraPedida, setCamaraPedida] = useState(false)
 
   const [nombre, setNombre] = useState('')
   const [categoria, setCategoria] = useState('')
@@ -188,18 +198,32 @@ export function ProductoSheet({
               </div>
             </Field>
           </div>
-          <Input
-            label="Código de barras (opcional)"
-            hint="Escaneálo con el lector apuntando acá, o escribilo a mano"
-            placeholder="Ej. 7790070073187"
-            inputMode="numeric"
-            leading={<Barcode className="size-[17px]" strokeWidth={1.9} />}
-            value={codigoBarras}
-            onChange={(e) => {
-              setCodigoBarras(e.target.value)
-              if (error) setError(undefined)
-            }}
-          />
+          <div className="flex items-end gap-2">
+            <Input
+              label="Código de barras (opcional)"
+              hint="Escaneálo con el lector apuntando acá, o escribilo a mano"
+              placeholder="Ej. 7790070073187"
+              inputMode="numeric"
+              leading={<Barcode className="size-[17px]" strokeWidth={1.9} />}
+              value={codigoBarras}
+              onChange={(e) => {
+                setCodigoBarras(e.target.value)
+                if (error) setError(undefined)
+              }}
+              className="flex-1"
+            />
+            <Button
+              variant="secondary"
+              size="md"
+              aria-label="Escanear código de barras con la cámara"
+              onClick={() => {
+                setCamaraPedida(true)
+                setCamara(true)
+              }}
+            >
+              <Camera className="size-[18px]" strokeWidth={1.9} />
+            </Button>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Categoría"
@@ -281,6 +305,17 @@ export function ProductoSheet({
         title="¿Eliminar este producto?"
         description={producto ? `Se va a borrar “${producto.nombre}” del catálogo.` : undefined}
       />
+
+      {camaraPedida && (
+        <EscanearCamara
+          open={camara}
+          onClose={() => setCamara(false)}
+          onDetectado={(codigo) => {
+            setCamara(false)
+            setCodigoBarras(codigo)
+          }}
+        />
+      )}
     </>
   )
 }

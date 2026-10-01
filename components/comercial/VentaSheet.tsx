@@ -1,7 +1,8 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Search, ShoppingBag } from 'lucide-react'
+import dynamic from 'next/dynamic'
+import { Camera, Search, ShoppingBag } from 'lucide-react'
 import { Sheet } from '@/components/ui/Sheet'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -15,6 +16,13 @@ import { ahoraISO, money } from '@/lib/format'
 import { buscarPorCodigo, buscarPorCodigoBarras } from '@/lib/codigos'
 import { cn } from '@/lib/cn'
 import type { MetodoPago, Producto } from '@/lib/types'
+
+// La librería de lectura de códigos (ZXing) pesa bastante — se carga recién
+// cuando alguien toca el botón de cámara, no de arriba para toda la app.
+const EscanearCamara = dynamic(
+  () => import('@/components/comercial/EscanearCamara').then((m) => m.EscanearCamara),
+  { ssr: false },
+)
 
 /**
  * Alta de una venta manual. El carrito vive en un mapa productoId → cantidad
@@ -33,6 +41,11 @@ export function VentaSheet({
   const [busqueda, setBusqueda] = useState('')
   const [carrito, setCarrito] = useState<Record<string, number>>({})
   const [metodo, setMetodo] = useState<MetodoPago>('efectivo')
+  const [camara, setCamara] = useState(false)
+  /** Una vez que se pide la cámara, la hoja queda montada (con su propia
+   *  animación de cierre); antes de eso ni siquiera se pide el chunk de
+   *  ZXing — así no todos los que abren "Registrar venta" lo descargan. */
+  const [camaraPedida, setCamaraPedida] = useState(false)
 
   const filtrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -50,31 +63,34 @@ export function VentaSheet({
 
   const total = items.reduce((s, i) => s + i.producto.precio * i.cantidad, 0)
 
-  /** Un lector de código de barras "tipea" el número y manda Enter solo —
-   *  no hace falta ninguna integración especial, alcanza con escuchar ese
-   *  Enter acá y buscar el producto por código de barras o por el código
-   *  cortito de Rindo (por si el comerciante lo tipea a mano). */
-  function escanear(ev: React.KeyboardEvent<HTMLInputElement>) {
+  /** Agrega al carrito el producto que tenga este código, venga de donde
+   *  venga (lector físico, cámara, o tipeado a mano): primero prueba por
+   *  código de barras real, después por el código cortito de Rindo. */
+  function agregarPorCodigo(valor: string) {
+    const producto = buscarPorCodigoBarras(productos, valor) ?? buscarPorCodigo(productos, valor)
+    if (!producto) {
+      toast('Ningún producto tiene ese código', 'aviso')
+      return
+    }
+    setCarrito((c) => ({ ...c, [producto.id]: (c[producto.id] ?? 0) + 1 }))
+    setBusqueda('')
+    toast(`${producto.nombre} agregado`)
+  }
+
+  /** Un lector de código de barras físico "tipea" el número y manda Enter
+   *  solo — no hace falta ninguna integración especial, alcanza con
+   *  escuchar ese Enter acá. */
+  function escanearConTeclado(ev: React.KeyboardEvent<HTMLInputElement>) {
     if (ev.key !== 'Enter') return
     const valor = busqueda.trim()
     if (!valor) return
 
-    const producto = buscarPorCodigoBarras(productos, valor) ?? buscarPorCodigo(productos, valor)
-    if (producto) {
-      ev.preventDefault()
-      setCarrito((c) => ({ ...c, [producto.id]: (c[producto.id] ?? 0) + 1 }))
-      setBusqueda('')
-      toast(`${producto.nombre} agregado`)
-      return
-    }
-
-    // Sólo avisa "no encontrado" cuando el texto tiene toda la pinta de ser un
-    // código escaneado (sólo dígitos, largo típico de un EAN/UPC) — si no, es
-    // una búsqueda por nombre normal y el Enter no tiene que hacer nada raro.
-    if (/^\d{6,}$/.test(valor)) {
-      ev.preventDefault()
-      toast('Ningún producto tiene ese código de barras', 'aviso')
-    }
+    // Sólo intercepta el Enter cuando el texto tiene toda la pinta de ser un
+    // código (sólo dígitos, largo típico de un EAN/UPC o del código cortito)
+    // — si no, es una búsqueda por nombre normal y el Enter no hace nada raro.
+    if (!/^\d+$/.test(valor)) return
+    ev.preventDefault()
+    agregarPorCodigo(valor)
   }
 
   function resetear() {
@@ -106,6 +122,7 @@ export function VentaSheet({
   }
 
   return (
+    <>
     <Sheet
       open={open}
       onClose={() => {
@@ -121,14 +138,28 @@ export function VentaSheet({
       }
     >
       <div className="space-y-4 pb-2">
-        <Input
-          leading={<Search className="size-[17px]" strokeWidth={1.9} />}
-          placeholder="Buscar producto o escanear código…"
-          autoFocus
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          onKeyDown={escanear}
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            leading={<Search className="size-[17px]" strokeWidth={1.9} />}
+            placeholder="Buscar producto o escanear código…"
+            autoFocus
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            onKeyDown={escanearConTeclado}
+            className="flex-1"
+          />
+          <Button
+            variant="secondary"
+            size="md"
+            aria-label="Escanear con la cámara"
+            onClick={() => {
+              setCamaraPedida(true)
+              setCamara(true)
+            }}
+          >
+            <Camera className="size-[18px]" strokeWidth={1.9} />
+          </Button>
+        </div>
 
         {productos.length === 0 ? (
           <Empty
@@ -181,5 +212,17 @@ export function VentaSheet({
         </Field>
       </div>
     </Sheet>
+
+    {camaraPedida && (
+      <EscanearCamara
+        open={camara}
+        onClose={() => setCamara(false)}
+        onDetectado={(codigo) => {
+          setCamara(false)
+          agregarPorCodigo(codigo)
+        }}
+      />
+    )}
+    </>
   )
 }
