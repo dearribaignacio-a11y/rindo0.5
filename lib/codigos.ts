@@ -30,3 +30,11 @@ export function buscarPorCodigo(productos: Producto[], codigo: string): Producto
   if (!buscado) return undefined
   return productos.find((p) => p.codigo?.trim().toLowerCase() === buscado)
 }
+
+/** Busca un producto por su código de barras real (EAN/UPC), tal como lo
+ *  entrega un lector escaneando el producto. */
+export function buscarPorCodigoBarras(productos: Producto[], codigoBarras: string): Producto | undefined {
+  const buscado = codigoBarras.trim()
+  if (!buscado) return undefined
+  return productos.find((p) => p.codigoBarras?.trim() === buscado)
+}

@@ -82,6 +82,8 @@ export type ProductoRow = {
   stock_min: number
   /** Código corto opcional, único por cuenta (ver migración 0007). */
   codigo: string | null
+  /** Código de barras real (EAN/UPC) para vender escaneando (ver migración 0013). */
+  codigo_barras: string | null
   created_at: string
   updated_at: string
 }

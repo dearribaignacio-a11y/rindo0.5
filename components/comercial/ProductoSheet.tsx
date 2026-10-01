@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Barcode, Trash2 } from 'lucide-react'
 import { Sheet } from '@/components/ui/Sheet'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Button } from '@/components/ui/Button'
@@ -34,6 +34,7 @@ export function ProductoSheet({
   const [categoria, setCategoria] = useState('')
   const [subcategoria, setSubcategoria] = useState('')
   const [codigo, setCodigo] = useState('')
+  const [codigoBarras, setCodigoBarras] = useState('')
   const [costo, setCosto] = useState<number | null>(null)
   const [precio, setPrecio] = useState<number | null>(null)
   const [stock, setStock] = useState<number | null>(null)
@@ -63,6 +64,7 @@ export function ProductoSheet({
       // Los productos cargados antes de este código no tenían uno: se les
       // asigna recién acá, la primera vez que se vuelven a abrir para editar.
       setCodigo(producto.codigo ?? asignarCodigo(productos))
+      setCodigoBarras(producto.codigoBarras ?? '')
       setCosto(producto.costo)
       setPrecio(producto.precio)
       setStock(producto.stock)
@@ -73,6 +75,7 @@ export function ProductoSheet({
       setSubcategoria('')
       // Automático: nadie tiene que pensar un código al cargar un producto.
       setCodigo(asignarCodigo(productos))
+      setCodigoBarras('')
       setCosto(null)
       setPrecio(null)
       setStock(null)
@@ -98,11 +101,17 @@ export function ProductoSheet({
     )
     if (repetido) return setError('Ya tenés un producto con ese nombre')
 
+    const barrasLimpio = codigoBarras.trim()
+    const barrasRepetido =
+      barrasLimpio && productos.some((x) => x.id !== producto?.id && x.codigoBarras?.trim() === barrasLimpio)
+    if (barrasRepetido) return setError('Ya tenés otro producto con ese código de barras')
+
     const datos = {
       nombre: limpio,
       categoria: categoria.trim() || 'Sin categoría',
       subcategoria: subcategoria.trim() || undefined,
       codigo,
+      codigoBarras: barrasLimpio || undefined,
       costo: costo ?? 0,
       precio,
       stock: stock ?? 0,
@@ -179,6 +188,18 @@ export function ProductoSheet({
               </div>
             </Field>
           </div>
+          <Input
+            label="Código de barras (opcional)"
+            hint="Escaneálo con el lector apuntando acá, o escribilo a mano"
+            placeholder="Ej. 7790070073187"
+            inputMode="numeric"
+            leading={<Barcode className="size-[17px]" strokeWidth={1.9} />}
+            value={codigoBarras}
+            onChange={(e) => {
+              setCodigoBarras(e.target.value)
+              if (error) setError(undefined)
+            }}
+          />
           <div className="grid grid-cols-2 gap-3">
             <Input
               label="Categoría"

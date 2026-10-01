@@ -12,6 +12,7 @@ import { IconChip, iconoRubro } from '@/components/ui/Icon'
 import { useToast } from '@/components/ui/Toast'
 import { addVenta } from '@/lib/storage'
 import { ahoraISO, money } from '@/lib/format'
+import { buscarPorCodigo, buscarPorCodigoBarras } from '@/lib/codigos'
 import { cn } from '@/lib/cn'
 import type { MetodoPago, Producto } from '@/lib/types'
 
@@ -48,6 +49,33 @@ export function VentaSheet({
     .filter((x): x is { producto: Producto; cantidad: number } => Boolean(x))
 
   const total = items.reduce((s, i) => s + i.producto.precio * i.cantidad, 0)
+
+  /** Un lector de código de barras "tipea" el número y manda Enter solo —
+   *  no hace falta ninguna integración especial, alcanza con escuchar ese
+   *  Enter acá y buscar el producto por código de barras o por el código
+   *  cortito de Rindo (por si el comerciante lo tipea a mano). */
+  function escanear(ev: React.KeyboardEvent<HTMLInputElement>) {
+    if (ev.key !== 'Enter') return
+    const valor = busqueda.trim()
+    if (!valor) return
+
+    const producto = buscarPorCodigoBarras(productos, valor) ?? buscarPorCodigo(productos, valor)
+    if (producto) {
+      ev.preventDefault()
+      setCarrito((c) => ({ ...c, [producto.id]: (c[producto.id] ?? 0) + 1 }))
+      setBusqueda('')
+      toast(`${producto.nombre} agregado`)
+      return
+    }
+
+    // Sólo avisa "no encontrado" cuando el texto tiene toda la pinta de ser un
+    // código escaneado (sólo dígitos, largo típico de un EAN/UPC) — si no, es
+    // una búsqueda por nombre normal y el Enter no tiene que hacer nada raro.
+    if (/^\d{6,}$/.test(valor)) {
+      ev.preventDefault()
+      toast('Ningún producto tiene ese código de barras', 'aviso')
+    }
+  }
 
   function resetear() {
     setBusqueda('')
@@ -95,9 +123,11 @@ export function VentaSheet({
       <div className="space-y-4 pb-2">
         <Input
           leading={<Search className="size-[17px]" strokeWidth={1.9} />}
-          placeholder="Buscar producto…"
+          placeholder="Buscar producto o escanear código…"
+          autoFocus
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
+          onKeyDown={escanear}
         />
 
         {productos.length === 0 ? (

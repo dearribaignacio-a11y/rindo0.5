@@ -15,6 +15,7 @@ function productoDesdeRow(row: ProductoRow): Producto {
     stock: Number(row.stock),
     stockMin: Number(row.stock_min),
     codigo: row.codigo ?? undefined,
+    codigoBarras: row.codigo_barras ?? undefined,
   }
 }
 
@@ -76,6 +77,7 @@ export async function crearProducto(datos: Omit<Producto, 'id'>): Promise<Produc
       stock: datos.stock,
       stock_min: datos.stockMin,
       codigo: datos.codigo || null,
+      codigo_barras: datos.codigoBarras || null,
     })
     .select()
     .single()
@@ -94,6 +96,7 @@ export async function actualizarProducto(id: string, patch: Partial<Producto>): 
   if (patch.stock !== undefined) cambios.stock = patch.stock
   if (patch.stockMin !== undefined) cambios.stock_min = patch.stockMin
   if (patch.codigo !== undefined) cambios.codigo = patch.codigo || null
+  if (patch.codigoBarras !== undefined) cambios.codigo_barras = patch.codigoBarras || null
 
   const { data, error } = await supabase
     .from('productos')

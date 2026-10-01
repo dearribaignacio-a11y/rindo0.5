@@ -108,6 +108,11 @@ export interface Producto {
    *  identifique sin ambigüedad en vez de adivinar por nombre. Único por
    *  cuenta, no global — no se vuelve a editar a mano. */
   codigo?: string
+  /** Código de barras real del producto (EAN/UPC, el que ya trae impreso de
+   *  fábrica), para vender escaneándolo con un lector. A diferencia de
+   *  `codigo` lo carga el comerciante a mano (una vez, por producto) — Rindo
+   *  no lo puede inventar. */
+  codigoBarras?: string
 }
 
 export interface ItemVenta {
