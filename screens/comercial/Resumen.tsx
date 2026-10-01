@@ -99,6 +99,17 @@ export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => v
           </div>
         </Card>
 
+        <Card interactive onClick={() => nav.push('contador')} className="mt-4 flex items-center gap-3">
+          <IconChip icon={FileSpreadsheet} size="sm" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-medium text-ink">Enviar al contador</p>
+            <p className="mt-0.5 truncate text-[12.5px] text-ink-faint">
+              Ventas, compras y stock del mes en Excel
+            </p>
+          </div>
+          <ChevronRight className="size-[18px] shrink-0 text-ink-faint" />
+        </Card>
+
         <SectionTitle
           action={
             db.cajaHoy && (
@@ -170,18 +181,6 @@ export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => v
             </Card>
           </>
         )}
-
-        <SectionTitle>Contador</SectionTitle>
-        <Card interactive onClick={() => nav.push('contador')} className="flex items-center gap-3">
-          <IconChip icon={FileSpreadsheet} />
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium text-ink">Enviar al contador</p>
-            <p className="mt-0.5 truncate text-[12.5px] text-ink-faint">
-              Ventas, compras y stock del mes en Excel
-            </p>
-          </div>
-          <ChevronRight className="size-[18px] shrink-0 text-ink-faint" />
-        </Card>
 
         <SectionTitle
           action={
@@ -269,6 +268,12 @@ export function ComercialResumen({ db, onVerTodo }: { db: DB; onVerTodo: () => v
             label: 'Registrar venta',
             icon: PencilLine,
             onSelect: () => setSheet('venta'),
+          },
+          {
+            id: 'contador',
+            label: 'Enviar al contador',
+            icon: FileSpreadsheet,
+            onSelect: () => nav.push('contador'),
           },
         ]}
       />
