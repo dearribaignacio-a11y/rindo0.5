@@ -9,6 +9,7 @@ import {
   CircleX,
   Coins,
   CreditCard,
+  FileSpreadsheet,
   Languages,
   LogOut,
   MessageSquareText,
@@ -188,6 +189,12 @@ export function Ajustes({ db, onCerrarSesion }: { db: DB; onCerrarSesion: () => 
                 label="Impuestos"
                 valor={`${db.impuestos.length}`}
                 onClick={() => nav.push('impuestos')}
+              />
+              <Fila
+                icon={<FileSpreadsheet className="size-[18px]" strokeWidth={1.9} />}
+                label="Enviar al contador"
+                valor={db.ajustes.contador?.nombre}
+                onClick={() => nav.push('contador')}
               />
               <Fila
                 icon={<CircleX className="size-[18px]" strokeWidth={1.9} />}

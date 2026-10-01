@@ -104,6 +104,7 @@ export function StockFoto({ db }: { db: DB }) {
         })),
         total: total ?? items.reduce((s, i) => s + i.costo * i.cantidad, 0),
         origen: 'foto',
+        proveedor: proveedor.trim() || undefined,
       })
       toast('Stock actualizado')
       nav.pop()

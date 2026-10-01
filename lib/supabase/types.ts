@@ -122,6 +122,11 @@ export type ReposicionRow = {
   items: ItemReposicionJSON[]
   total: number
   origen: 'manual' | 'foto'
+  /** Columnas de la migración 0012 — opcionales en el tipo porque una base
+   *  sin esa migración no las devuelve. */
+  proveedor?: string | null
+  comprobante?: string | null
+  foto?: string | null
   created_at: string
 }
 

@@ -35,6 +35,9 @@ function reposicionDesdeRow(row: ReposicionRow): Reposicion {
     items: row.items,
     total: Number(row.total),
     origen: row.origen,
+    proveedor: row.proveedor ?? undefined,
+    comprobante: row.comprobante ?? undefined,
+    foto: row.foto ?? undefined,
   }
 }
 
@@ -201,19 +204,29 @@ export async function fetchReposiciones(): Promise<Reposicion[]> {
 
 export async function crearReposicion(datos: Omit<Reposicion, 'id'>): Promise<Reposicion> {
   const { supabase, user } = await usuarioActual()
-  const { data, error } = await supabase
-    .from('reposiciones')
-    .insert({
-      user_id: user.id,
-      fecha: datos.fecha,
-      items: datos.items as unknown as ItemReposicionJSON[],
-      total: datos.total,
-      origen: datos.origen,
-    })
-    .select()
-    .single()
-  if (error) throw error
-  return reposicionDesdeRow(data)
+  const base = {
+    user_id: user.id,
+    fecha: datos.fecha,
+    items: datos.items as unknown as ItemReposicionJSON[],
+    total: datos.total,
+    origen: datos.origen,
+  }
+  // Proveedor, comprobante y foto sólo viajan si vienen con dato: así una
+  // base sin la migración 0012 sigue aceptando las reposiciones de siempre.
+  const extras = {
+    ...(datos.proveedor ? { proveedor: datos.proveedor } : {}),
+    ...(datos.comprobante ? { comprobante: datos.comprobante } : {}),
+    ...(datos.foto ? { foto: datos.foto } : {}),
+  }
+
+  let res = await supabase.from('reposiciones').insert({ ...base, ...extras }).select().single()
+  // PGRST204: columna desconocida — la migración 0012 todavía no se corrió.
+  // Mejor perder el proveedor que dejar la factura sin cargar al stock.
+  if (res.error?.code === 'PGRST204' && Object.keys(extras).length > 0) {
+    res = await supabase.from('reposiciones').insert(base).select().single()
+  }
+  if (res.error) throw res.error
+  return reposicionDesdeRow(res.data)
 }
 
 /** Borra productos, ventas y reposiciones de la cuenta — usado por "Borrar

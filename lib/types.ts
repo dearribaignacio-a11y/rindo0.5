@@ -147,6 +147,13 @@ export interface Reposicion {
   items: ItemReposicion[]
   total: number
   origen: 'manual' | 'foto'
+  /** Proveedor tal como figura en la factura. Opcional: las reposiciones
+   *  cargadas antes de la migración 0012 no lo tienen. */
+  proveedor?: string
+  /** Número de comprobante (ej. "A 0003-00012457"). */
+  comprobante?: string
+  /** Nombre o ruta del archivo de la foto de la factura. */
+  foto?: string
 }
 
 export interface Empleado {
@@ -219,11 +226,21 @@ export interface Mensaje {
   confirmacion?: ConfirmacionChat
 }
 
+/** Contador del comercio, para "Enviar al contador". */
+export interface Contador {
+  nombre: string
+  /** Sólo dígitos, formato internacional argentino: 549 + área + número
+   *  (ej. 5492644123456). Es lo que pide https://wa.me/. */
+  whatsapp: string
+}
+
 export interface Ajustes {
   tema: ThemeId
   moneda: string
   notificaciones: boolean
   idioma: string
+  /** Se carga una vez desde "Enviar al contador" y queda guardado. */
+  contador?: Contador
 }
 
 export interface Flags {
