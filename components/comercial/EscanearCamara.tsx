@@ -33,7 +33,17 @@ export function EscanearCamara({
 
     lector
       .decodeFromConstraints(
-        { video: { facingMode: 'environment' } },
+        {
+          video: {
+            facingMode: 'environment',
+            // Sin esto el navegador suele arrancar en una resolución baja
+            // (640x480), insuficiente para distinguir las barras finas de un
+            // código EAN/UPC a una distancia cómoda — "ideal", no "exacta",
+            // para que igual funcione en celulares que no llegan a tanto.
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
+        },
         video.current!,
         (resultado, _err, controls) => {
           controles = controls
@@ -55,23 +65,25 @@ export function EscanearCamara({
   }, [open])
 
   return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      title="Escanear con la cámara"
-      subtitle={error ? undefined : 'Apuntá al código de barras, bien de cerca y con luz'}
-    >
-      <div className="pb-4">
+    <Sheet open={open} onClose={onClose} title="Escanear con la cámara">
+      <div className="space-y-3 pb-4">
         {error ? (
           <p className="rounded-[10px] border border-warn/40 bg-warn-dim px-3 py-2 text-[12.5px] leading-relaxed text-warn">
             {error}
           </p>
         ) : (
-          <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-black">
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video ref={video} className="size-full object-cover" muted playsInline />
-            <div className="pointer-events-none absolute inset-x-10 top-1/2 h-16 -translate-y-1/2 rounded-lg border-2 border-accent-hi/80" />
-          </div>
+          <>
+            <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-black">
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video ref={video} className="size-full object-cover" muted playsInline />
+              <div className="pointer-events-none absolute inset-x-10 top-1/2 h-16 -translate-y-1/2 rounded-lg border-2 border-accent-hi/80" />
+            </div>
+            <p className="text-[12.5px] leading-relaxed text-ink-faint">
+              Que el código ocupe el recuadro de arriba, derecho y con buena luz. Si lo tenés muy
+              pegado a la cámara se ve borroso: alejalo despacio hasta que enfoque — el punto justo
+              suele estar a unos 10-15 cm.
+            </p>
+          </>
         )}
       </div>
     </Sheet>
