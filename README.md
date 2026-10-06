@@ -71,6 +71,21 @@ Cargá la pública como `NEXT_PUBLIC_VAPID_PUBLIC_KEY` y la privada como
 `VAPID_PRIVATE_KEY` en Vercel (**Settings → Environment Variables**) y en
 `.env.local` para desarrollo. La privada nunca sale de `lib/server/push.ts`.
 
+### Proteger los cron diarios: `CRON_SECRET`
+
+Dos Route Handlers los dispara Vercel Cron una vez al día (ver `vercel.json`):
+`app/api/mercadopago/cobrar-renovaciones` (bloquea cuentas pagas vencidas) y
+`app/api/notificaciones/verificar` (manda los avisos de stock bajo y
+vencimiento de plan). Los dos chequean `CRON_SECRET` contra el header
+`Authorization` que Vercel manda solo en sus propios crons — **sin la
+variable cargada, igual funcionan, pero cualquiera que conozca la URL podría
+dispararlos a mano**.
+
+Para activar la protección: en Vercel, **Settings → Environment Variables →
+Add**, nombre `CRON_SECRET`, valor cualquier cadena larga al azar (por
+ejemplo `openssl rand -hex 32`), y redeploy. Vercel manda ese mismo valor
+solo cuando ejecuta sus crons — no hace falta configurar nada más.
+
 ## Enviar al contador (prototipo)
 
 Pantalla de los planes comerciales (Resumen → "Enviar al contador", o
