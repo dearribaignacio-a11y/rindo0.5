@@ -61,10 +61,8 @@ export const PLANES: Record<PlanId, Plan> = {
     id: 'comercial',
     nombre: 'Comercial',
     bajada: 'Para tu negocio',
-    // TEMPORAL: precio real es 8900/89000 — bajado para probar el cobro con
-    // tarjeta real sin gastar de más. Volver a subirlo cuando el usuario avise.
-    mensual: 100,
-    anual: 100,
+    mensual: 8900,
+    anual: 89000,
     icon: Store,
     badge: 'Recomendado',
     recomendado: true,
@@ -81,9 +79,8 @@ export const PLANES: Record<PlanId, Plan> = {
     id: 'comercial-pro',
     nombre: 'Comercial Pro',
     bajada: 'Con Asistente IA',
-    // TEMPORAL: mismo motivo que Comercial — precio real es 14900/149000.
-    mensual: 100,
-    anual: 100,
+    mensual: 14900,
+    anual: 149000,
     icon: Warehouse,
     badge: 'IA',
     conAnuncios: false,
