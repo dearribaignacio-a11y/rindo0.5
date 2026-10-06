@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { bloquearVencidos } from '@/lib/server/mercadopago'
+import { esCronAutorizado } from '@/lib/server/limites'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -8,12 +9,11 @@ export const dynamic = 'force-dynamic'
  * Cron diario (ver `vercel.json`): bloquea las cuentas pagas cuyo
  * `proximo_cobro` ya venció y no pagaron de nuevo. No intenta cobrar nada
  * solo — no hay tarjeta guardada — el usuario vuelve a pagar desde la
- * pantalla de "Cuenta pausada". Protegido con `CRON_SECRET` — Vercel lo
- * manda solo en el header `Authorization` de sus propios crons.
+ * pantalla de "Cuenta pausada". Sólo lo puede disparar Vercel, que manda
+ * `CRON_SECRET` en el header `Authorization` de sus propios crons.
  */
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET
-  if (secret && req.headers.get('authorization') !== `Bearer ${secret}`) {
+  if (!esCronAutorizado(req)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 

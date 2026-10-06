@@ -187,11 +187,13 @@ export async function hidratarPerfil() {
   }))
 }
 
-/** Cambia de plan local y en Supabase, para que el plan de la cuenta no
- *  dependa de en qué navegador se lo cambiaste. */
+/** Cambia de plan en Supabase y después local, para que el plan de la cuenta
+ *  no dependa de en qué navegador se lo cambiaste. En ese orden: si la base
+ *  rechaza el cambio (subir a un plan pago sin pagarlo), la app no queda
+ *  mostrando un plan que la cuenta no tiene. */
 export async function cambiarPlan(plan: Perfil['plan']) {
-  updatePerfil({ plan })
   await negocio.actualizarPlanRemoto(plan)
+  updatePerfil({ plan })
 }
 
 export const getAjustes = () => getDB().ajustes

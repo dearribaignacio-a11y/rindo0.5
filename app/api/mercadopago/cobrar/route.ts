@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { cobrarPlan } from '@/lib/server/mercadopago'
+import { CobroInvalido, cobrarPlan } from '@/lib/server/mercadopago'
 import { esComercial } from '@/lib/plans'
 import type { PlanId } from '@/lib/types'
 
@@ -16,15 +16,17 @@ export const dynamic = 'force-dynamic'
  * si no, no toca nada.
  */
 export async function POST(req: Request) {
-  const { token, identificacion, plan, meses, diferencia } = (await req.json()) as {
+  const cuerpo = (await req.json().catch(() => null)) as {
     token?: string
     identificacion?: { type?: string; number?: string }
     plan?: PlanId
     meses?: number
     diferencia?: number
-  }
+  } | null
+  if (!cuerpo) return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 })
+  const { token, identificacion, plan, meses, diferencia } = cuerpo
 
-  if (!token) {
+  if (!token || typeof token !== 'string' || token.length > 200) {
     return NextResponse.json({ error: 'Falta el token de la tarjeta' }, { status: 400 })
   }
   if (!plan || !esComercial(plan)) {
@@ -33,7 +35,8 @@ export async function POST(req: Request) {
 
   const esDiferencia = typeof diferencia === 'number'
   if (esDiferencia) {
-    if (!(diferencia > 0)) {
+    // El monto real lo recalcula `cobrarPlan` con los datos de la base.
+    if (!Number.isFinite(diferencia) || !(diferencia > 0)) {
       return NextResponse.json({ error: 'Diferencia inválida' }, { status: 400 })
     }
   } else {
@@ -57,12 +60,17 @@ export async function POST(req: Request) {
       userId: user.id,
       email: user.email,
       token,
-      identificacion,
+      identificacion: identificacion?.number
+        ? { type: 'DNI', number: String(identificacion.number).replace(/\D/g, '').slice(0, 15) }
+        : undefined,
       plan,
       ...(esDiferencia ? { diferencia } : { meses }),
     })
     return NextResponse.json({ ok: true })
   } catch (err) {
+    if (err instanceof CobroInvalido) {
+      return NextResponse.json({ error: err.message, detalle: err.message }, { status: 400 })
+    }
     console.error('cobrar', err)
     const detalle = err instanceof Error ? err.message : 'Error desconocido'
     return NextResponse.json({ error: 'No pudimos procesar el pago', detalle }, { status: 500 })

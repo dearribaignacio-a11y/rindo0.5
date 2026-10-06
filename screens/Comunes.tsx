@@ -188,7 +188,11 @@ export function PantallaPassword() {
     })
     if (!resVerificar.ok) {
       setGuardando(false)
-      setError('La contraseña actual no es correcta')
+      setError(
+        resVerificar.status === 429
+          ? 'Demasiados intentos. Probá de nuevo en un rato.'
+          : 'La contraseña actual no es correcta',
+      )
       return
     }
 
@@ -402,11 +406,18 @@ export function PantallaPlanes({ db }: { db: DB }) {
 
     // Cambiar entre dos planes pagos ya al día (Comercial ↔ Comercial Pro) no
     // arranca un cobro nuevo desde cero: se prorratea lo que ya está pagado y
-    // sólo se cobra la diferencia (o nada, si el plan nuevo es igual o más
-    // barato). Ver `diferenciaProrrateada` en lib/plans.ts.
+    // sólo se cobra la diferencia. Bajar a Comercial no cobra nada; subir a
+    // Pro siempre pasa por el pago (la base no deja subir de plan sin pagar).
+    // Ver `diferenciaProrrateada` en lib/plans.ts.
     if (esComercial(actual) && esComercial(pid) && db.perfil.suscripcionActiva && db.perfil.proximoCobro) {
       const diferencia = diferenciaProrrateada(actual, pid, db.perfil.proximoCobro)
-      if (diferencia <= 0) {
+      const esBaja = actual === 'comercial-pro' && pid === 'comercial'
+      if (!esBaja && diferencia <= 0) {
+        // Sin días por prorratear: se paga el plan nuevo entero.
+        nav.push('pagar-tarjeta', { plan: pid })
+        return
+      }
+      if (esBaja) {
         setCambiando(pid)
         setTimeout(async () => {
           try {

@@ -30,3 +30,25 @@ export async function createClient() {
     },
   )
 }
+
+/**
+ * Usuario de la sesión para las páginas del servidor, con tiempo límite: si
+ * Supabase no contesta (proyecto pausado, caído), tira un error que muestra
+ * `app/error.tsx` con un botón de reintentar, en vez de dejar la página
+ * colgada hasta que Vercel la corte con un 504.
+ */
+export async function usuarioDeLaSesion(limiteMs = 7000) {
+  const supabase = await createClient()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const { data } = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, rechazar) => {
+        timer = setTimeout(() => rechazar(new Error('Supabase no respondió a tiempo')), limiteMs)
+      }),
+    ])
+    return data.user
+  } finally {
+    clearTimeout(timer)
+  }
+}

@@ -1,3 +1,4 @@
+import 'server-only'
 import webpush from 'web-push'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -22,6 +23,17 @@ export interface SuscripcionPush {
   auth: string
 }
 
+/** Servicios de push de los navegadores (Chrome/Android, Firefox, Safari,
+ *  Edge). El servidor le hace un POST a cada endpoint guardado: aceptar
+ *  cualquier dirección dejaba usar a Rindo para pegarle a otras máquinas.
+ *  Mismo patrón que el `check` de la migración 0014. */
+const ENDPOINT_PUSH =
+  /^https:\/\/(fcm\.googleapis\.com|android\.googleapis\.com|updates\.push\.services\.mozilla\.com|web\.push\.apple\.com|[a-z0-9-]+\.notify\.windows\.com)\//
+
+export function endpointPushValido(endpoint: string): boolean {
+  return endpoint.length <= 1000 && ENDPOINT_PUSH.test(endpoint)
+}
+
 /**
  * Manda una notificación a una suscripción puntual. Si el navegador ya no
  * existe del otro lado (410/404 — se desinstaló la app, se revocó el
@@ -33,7 +45,7 @@ export async function enviarPush(
   payload: { title: string; body: string; url?: string },
 ): Promise<void> {
   const wp = cliente()
-  if (!wp) return
+  if (!wp || !endpointPushValido(sub.endpoint)) return
 
   try {
     await wp.sendNotification(

@@ -154,9 +154,9 @@ export type PushSubscriptionRow = {
 
 /** Tipado mínimo de la base para el cliente tipado de Supabase. Sólo declara
  *  lo que las migraciones crean; se amplía a medida que se agreguen tablas.
- *  `Relationships`, `Views` y `Functions` están vacíos a propósito — nada acá
- *  los usa todavía, pero `@supabase/postgrest-js` exige que existan para que
- *  el tipado genérico de `.from(...)` funcione (si no, infiere `never`). */
+ *  `Relationships` y `Views` están vacíos a propósito — nada acá los usa
+ *  todavía, pero `@supabase/postgrest-js` exige que existan para que el
+ *  tipado genérico de `.from(...)` funcione (si no, infiere `never`). */
 export type Database = {
   public: {
     Tables: {
@@ -215,6 +215,12 @@ export type Database = {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      /** Ver migración 0014 — sólo la puede llamar el servidor. */
+      consumir_cupo: {
+        Args: { p_clave: string; p_limite: number; p_segundos: number }
+        Returns: boolean
+      }
+    }
   }
 }

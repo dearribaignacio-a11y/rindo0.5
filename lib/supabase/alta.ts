@@ -30,7 +30,7 @@ export async function crearCuenta(
   if (res.status !== 503) {
     const cuerpo = (await res.json().catch(() => ({}))) as { ok?: boolean; nueva?: boolean; error?: string }
     if (!res.ok || !cuerpo.ok) {
-      return { error: traducir(cuerpo.error), conSesion: false }
+      return { error: traducir(cuerpo.error, res.status), conSesion: false }
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -85,7 +85,8 @@ export async function confirmarPendiente(email: string): Promise<boolean> {
   }
 }
 
-function traducir(msg?: string): string {
+function traducir(msg?: string, status?: number): string {
+  if (status === 429) return 'Demasiados intentos desde esta conexión. Probá de nuevo en un rato.'
   const m = (msg ?? '').toLowerCase()
   if (m.includes('password')) return 'La contraseña es muy débil. Probá con otra combinación.'
   if (m.includes('email')) return 'Ese email no es válido.'

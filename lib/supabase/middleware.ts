@@ -3,6 +3,11 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 const RUTAS_PUBLICAS = ['/login', '/auth', '/terminos', '/privacidad']
 
+/** Si Supabase no contesta en este tiempo (ej. el proyecto gratis se pausó
+ *  por inactividad), la página sigue sin renovar la sesión en vez de colgar
+ *  todo el sitio con un error 504 en negro. */
+const LIMITE_MS = 5000
+
 function esPublica(pathname: string) {
   return RUTAS_PUBLICAS.some((r) => pathname === r || pathname.startsWith(`${r}/`))
 }
@@ -41,11 +46,24 @@ export async function updateSession(request: NextRequest) {
   // No sacar este `getUser()`: es lo que efectivamente valida el token contra
   // el servidor de Supabase (a diferencia de `getSession()`, que sólo lee la
   // cookie) y dispara el refresh cuando hace falta.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const resultado = await Promise.race([
+    supabase.auth.getUser().then((r) => r.data.user),
+    new Promise<'sin-respuesta'>((res) => {
+      timer = setTimeout(() => res('sin-respuesta'), LIMITE_MS)
+    }),
+  ]).catch(() => 'sin-respuesta' as const)
+  clearTimeout(timer)
 
+  if (resultado === 'sin-respuesta') return supabaseResponse
+
+  const user = resultado
   const { pathname } = request.nextUrl
+
+  // Las rutas de la API se autentican solas (sesión o, en los cron,
+  // CRON_SECRET) y contestan 401 en JSON. Mandarlas al login rompía los cron
+  // de Vercel —que no tienen sesión— y nunca llegaban a ejecutarse.
+  if (pathname.startsWith('/api/')) return supabaseResponse
 
   if (!user && !esPublica(pathname) && pathname !== '/') {
     const url = request.nextUrl.clone()

@@ -1,13 +1,9 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { usuarioDeLaSesion } from '@/lib/supabase/server'
 import { AuthFlow } from '@/screens/AuthFlow'
 
 export default async function LoginPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const user = await usuarioDeLaSesion()
   if (user) redirect('/dashboard')
 
   return (

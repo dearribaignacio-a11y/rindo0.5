@@ -51,16 +51,32 @@ async function usuarioActual() {
   return { supabase, user }
 }
 
+/** Supabase corta cada respuesta en 1000 filas (configuración por defecto
+ *  del proyecto). Sin pedir de a páginas, pasadas las 1000 ventas las más
+ *  viejas dejaban de cargarse sin ningún aviso — y con ellas el mes anterior,
+ *  el Excel del contador y el acumulado de 12 meses para el Monotributo. */
+const PAGINA = 1000
+
+async function todasLasFilas<T>(
+  pedir: (desde: number, hasta: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const filas: T[] = []
+  for (let desde = 0; ; desde += PAGINA) {
+    const { data, error } = await pedir(desde, desde + PAGINA - 1)
+    if (error) throw error
+    filas.push(...(data ?? []))
+    if (!data || data.length < PAGINA) return filas
+  }
+}
+
 /* ── Productos ─────────────────────────────────────────────────────────── */
 
 export async function fetchProductos(): Promise<Producto[]> {
   const supabase = createClient()
-  const { data, error } = await supabase
-    .from('productos')
-    .select('*')
-    .order('nombre', { ascending: true })
-  if (error) throw error
-  return (data ?? []).map(productoDesdeRow)
+  const filas = await todasLasFilas((desde, hasta) =>
+    supabase.from('productos').select('*').order('nombre', { ascending: true }).order('id').range(desde, hasta),
+  )
+  return filas.map(productoDesdeRow)
 }
 
 export async function crearProducto(datos: Omit<Producto, 'id'>): Promise<Producto> {
@@ -142,12 +158,10 @@ export async function crearProductosEnLote(items: Omit<Producto, 'id'>[]): Promi
 
 export async function fetchVentas(): Promise<Venta[]> {
   const supabase = createClient()
-  const { data, error } = await supabase
-    .from('ventas')
-    .select('*')
-    .order('fecha', { ascending: false })
-  if (error) throw error
-  return (data ?? []).map(ventaDesdeRow)
+  const filas = await todasLasFilas((desde, hasta) =>
+    supabase.from('ventas').select('*').order('fecha', { ascending: false }).order('id').range(desde, hasta),
+  )
+  return filas.map(ventaDesdeRow)
 }
 
 export async function crearVenta(datos: Omit<Venta, 'id'>): Promise<Venta> {
@@ -197,12 +211,10 @@ export async function crearVentasEnLote(items: Omit<Venta, 'id'>[]): Promise<Ven
 
 export async function fetchReposiciones(): Promise<Reposicion[]> {
   const supabase = createClient()
-  const { data, error } = await supabase
-    .from('reposiciones')
-    .select('*')
-    .order('fecha', { ascending: false })
-  if (error) throw error
-  return (data ?? []).map(reposicionDesdeRow)
+  const filas = await todasLasFilas((desde, hasta) =>
+    supabase.from('reposiciones').select('*').order('fecha', { ascending: false }).order('id').range(desde, hasta),
+  )
+  return filas.map(reposicionDesdeRow)
 }
 
 export async function crearReposicion(datos: Omit<Reposicion, 'id'>): Promise<Reposicion> {

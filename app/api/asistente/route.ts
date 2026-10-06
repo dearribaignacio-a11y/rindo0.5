@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { MODELO, clienteIA, jsonDe, textoDe } from '@/lib/server/anthropic'
+import { autorizarIA } from '@/lib/server/sesion'
 
 /**
  * Asistente por chat del plan Comercial.
@@ -81,6 +82,24 @@ function operacionValida(op: unknown, ctx: Contexto): Operacion | undefined {
   const metodo = METODOS.includes(o.metodo as MetodoPago) ? (o.metodo as MetodoPago) : 'efectivo'
 
   return items.length ? { tipo: 'venta', items, metodo } : undefined
+}
+
+/** La tarjeta de confirmación sale tal cual del modelo: se acota la forma y
+ *  los largos para que una respuesta rara no rompa la pantalla del chat. */
+function confirmacionValida(c: unknown): Respuesta['confirmacion'] {
+  if (!c || typeof c !== 'object') return undefined
+  const { titulo, lineas } = c as { titulo?: unknown; lineas?: unknown }
+  if (typeof titulo !== 'string' || !Array.isArray(lineas)) return undefined
+  return {
+    titulo: titulo.slice(0, 80),
+    lineas: lineas
+      .filter(
+        (l): l is { etiqueta: string; valor: string } =>
+          !!l && typeof l.etiqueta === 'string' && typeof l.valor === 'string',
+      )
+      .slice(0, 10)
+      .map((l) => ({ etiqueta: l.etiqueta.slice(0, 60), valor: l.valor.slice(0, 120) })),
+  }
 }
 
 const SISTEMA = `Sos el asistente de Rindo, una app de gestión para comercios chicos de San Juan, Argentina.
@@ -258,11 +277,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Cuerpo inválido' }, { status: 400 })
   }
 
-  const mensaje = (cuerpo.mensaje ?? '').trim().slice(0, 2000)
-  const contexto = cuerpo.contexto ?? {}
+  const mensaje = (typeof cuerpo.mensaje === 'string' ? cuerpo.mensaje : '').trim().slice(0, 2000)
+  const contexto = cuerpo.contexto && typeof cuerpo.contexto === 'object' ? cuerpo.contexto : {}
   if (!mensaje) return NextResponse.json({ error: 'Mensaje vacío' }, { status: 400 })
 
   const cliente = clienteIA()
+
+  // El asistente es del plan Comercial Pro.
+  const permiso = await autorizarIA({ planes: ['comercial-pro'], consumeCupo: Boolean(cliente) })
+  if (!permiso.ok) return permiso.respuesta
+
   if (!cliente) {
     return NextResponse.json({ fuente: 'simulado', ...simular(mensaje, contexto) })
   }
@@ -292,8 +316,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       fuente: 'ia',
-      texto: datos.texto,
-      confirmacion: datos.confirmacion ?? undefined,
+      texto: String(datos.texto).slice(0, 1500),
+      confirmacion: confirmacionValida(datos.confirmacion),
       operacion: operacionValida(datos.operacion, contexto),
     })
   } catch (error) {

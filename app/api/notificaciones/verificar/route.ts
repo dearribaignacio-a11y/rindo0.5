@@ -1,17 +1,18 @@
 import { NextResponse } from 'next/server'
 import { avisarStockYVencimientos } from '@/lib/server/notificaciones'
+import { esCronAutorizado } from '@/lib/server/limites'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
  * Cron diario (ver `vercel.json`): manda las notificaciones push de stock
- * bajo y vencimiento de plan. Protegido con `CRON_SECRET`, igual que el cron
- * de renovaciones de Mercado Pago.
+ * bajo y vencimiento de plan. Sólo lo puede disparar Vercel (`CRON_SECRET`),
+ * igual que el cron de renovaciones — si no, cualquiera podía mandarle
+ * notificaciones a todos los comercios cuando quisiera.
  */
 export async function GET(req: Request) {
-  const secret = process.env.CRON_SECRET
-  if (secret && req.headers.get('authorization') !== `Bearer ${secret}`) {
+  if (!esCronAutorizado(req)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   }
 

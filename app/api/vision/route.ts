@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
 import { MODELO, clienteIA, jsonDe, partirDataUrl, textoDe } from '@/lib/server/anthropic'
+import { autorizarIA } from '@/lib/server/sesion'
+
+/** ~6 MB de foto en base64. */
+const MAX_IMAGEN = 8_000_000
 
 /**
  * Lectura de tickets (Hogar), facturas de proveedor (Comercial) y notas de
@@ -109,13 +113,25 @@ export async function POST(request: Request) {
   const modo: Modo = cuerpo.modo === 'factura' || cuerpo.modo === 'venta' ? cuerpo.modo : 'ticket'
   const cliente = clienteIA()
 
+  // Los tickets son del plan Hogar; facturas y notas de venta, de Comercio.
+  const permiso = await autorizarIA({
+    planes: modo === 'ticket' ? undefined : ['comercial', 'comercial-pro'],
+    consumeCupo: Boolean(cliente),
+  })
+  if (!permiso.ok) return permiso.respuesta
+
   // Sin clave configurada: la interfaz sigue siendo completamente funcional
   // contra datos de ejemplo.
   if (!cliente) {
     return NextResponse.json({ fuente: 'simulado', datos: simular(modo) })
   }
 
-  const imagen = cuerpo.imagen ? partirDataUrl(cuerpo.imagen) : null
+  // La app achica la foto antes de mandarla (~1280px, unos cientos de KB):
+  // algo mucho más grande no es una foto de la app.
+  if (typeof cuerpo.imagen !== 'string' || cuerpo.imagen.length > MAX_IMAGEN) {
+    return NextResponse.json({ error: 'La foto es muy grande. Probá con una más liviana.' }, { status: 413 })
+  }
+  const imagen = partirDataUrl(cuerpo.imagen)
   if (!imagen) {
     return NextResponse.json({ error: 'Se esperaba una imagen en dataURL' }, { status: 400 })
   }

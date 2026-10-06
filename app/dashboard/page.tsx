@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { usuarioDeLaSesion } from '@/lib/supabase/server'
 import { Rindo } from '@/screens/Rindo'
 
 /**
@@ -8,11 +8,7 @@ import { Rindo } from '@/screens/Rindo'
  * ya requiere una sesión real de Supabase, verificada en el servidor.
  */
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
+  const user = await usuarioDeLaSesion()
   if (!user) redirect('/login')
 
   return (
